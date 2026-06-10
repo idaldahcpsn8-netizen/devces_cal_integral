@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dev_Aldah_V3</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous">
+  <link rel="stylesheet" href="./riemann_sumas_javascript.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">∫</div>
+      <div>
+        <strong>Dev_Aldah_V3</strong>
+        <span>Studio matemático</span>
+      </div>
+    </div>
+
+    <nav class="section-nav" aria-label="Secciones principales">
+      <button class="section-tab" type="button" data-section="import"><i data-lucide="upload"></i><span>Importar archivo</span></button>
+      <button class="section-tab is-active" type="button" data-section="riemann"><i data-lucide="sigma"></i><span>Suma de Riemann</span></button>
+      <button class="section-tab" type="button" data-section="integrals"><i data-lucide="calculator"></i><span>Calculadora de integrales</span></button>
+      <button class="section-tab" type="button" data-section="assistant"><i data-lucide="bot"></i><span>Asistente</span></button>
+      <button class="section-tab" type="button" data-section="games"><i data-lucide="gamepad-2"></i><span>Juegos</span></button>
+    </nav>
+    <input id="importFileInput" class="sr-only" type="file" accept=".txt,.csv,.json,.png,.jpg,.jpeg,.webp,.pdf,image/*,application/pdf" aria-label="Importar archivo">
+
+    <div id="statusBar" class="status-pill">Listo</div>
+
+    <div class="top-actions">
+      <button id="resetBtn" class="icon-btn" type="button" title="Reiniciar"><i data-lucide="rotate-ccw"></i></button>
+      <button id="exportBtn" class="icon-btn" type="button" title="Exportar CSV"><i data-lucide="download"></i></button>
+      <button id="saveBtn" class="icon-btn primary" type="button" title="Guardar PNG"><i data-lucide="image"></i></button>
+    </div>
+  </header>
+
+  <div class="workspace section-riemann">
+    <aside class="algebra-panel" aria-label="Panel algebraico">
+      <div class="panel-title">
+        <div>
+          <h1>Suma de Riemann</h1>
+          <p>Función, intervalo y partición</p>
+        </div>
+        <button id="collapseDetailsBtn" class="icon-btn ghost" type="button" title="Mostrar u ocultar detalles"><i data-lucide="panel-right"></i></button>
+      </div>
+
+      <section class="control-block">
+        <label class="field field-wide">
+          <span>f(x)</span>
+          <input id="exprInput" type="text" value="sin(x) + 0.5*x" spellcheck="false" autocomplete="off">
+        </label>
+        <div id="mainExprPreview" class="math-preview"></div>
+
+        <div class="grid-two">
+          <label class="field">
+            <span>a</span>
+            <input id="aInput" type="number" value="-2" step="0.1">
+          </label>
+          <label class="field">
+            <span>b</span>
+            <input id="bInput" type="number" value="4" step="0.1">
+          </label>
+        </div>
+
+        <div class="n-control">
+          <div class="field n-number">
+            <span>n</span>
+            <input id="nInput" type="number" value="40" min="1" max="20000">
+          </div>
+          <input id="nRange" class="n-range" type="range" value="40" min="1" max="20000" step="1" aria-label="Número de rectángulos">
+        </div>
+
+        <div class="segmented" role="group" aria-label="Método de suma">
+          <button class="seg-btn" type="button" data-method="left">Izquierda</button>
+          <button class="seg-btn" type="button" data-method="right">Derecha</button>
+          <button class="seg-btn is-active" type="button" data-method="midpoint">Medio</button>
+        </div>
+        <select id="methodInput" class="sr-only" aria-label="Método">
+          <option value="left">Izquierda</option>
+          <option value="right">Derecha</option>
+          <option value="midpoint" selected>Punto medio</option>
+        </select>
+
+        <div class="switches">
+          <label class="switch"><input id="rectsInput" type="checkbox" checked><span>Rectángulos</span></label>
+          <label class="switch"><input id="samplesInput" type="checkbox" checked><span>Muestras</span></label>
+          <label class="switch"><input id="gridInput" type="checkbox" checked><span>Cuadrícula</span></label>
+          <label class="switch"><input id="infinityInput" type="checkbox"><span>n→∞</span></label>
+        </div>
+
+        <div class="example-row" aria-label="Ejemplos rápidos">
+          <button class="chip" type="button" data-example="sin(x) + 0.5*x">sin(x)+0.5x</button>
+          <button class="chip" type="button" data-example="x**2 - 3*x + 2">Parábola</button>
+          <button class="chip" type="button" data-example="cos(x) + 1">cos(x)+1</button>
+        </div>
+      </section>
+
+      <section class="object-list" aria-label="Objetos">
+        <div class="object-row">
+          <span class="swatch blue"></span>
+          <div><span>Función</span><b id="objectFunction">f(x)</b></div>
+        </div>
+        <div class="object-row">
+          <span class="swatch orange"></span>
+          <div><span>Partición</span><b><span id="metricN">40</span> rectángulos · Δx <span id="metricDx">0</span></b></div>
+        </div>
+        <div class="object-row">
+          <span class="swatch green"></span>
+          <div><span>Suma</span><b id="metricSum">0</b></div>
+        </div>
+        <div class="object-row">
+          <span class="swatch violet"></span>
+          <div><span>Integral</span><b id="metricIntegral">0</b></div>
+        </div>
+        <div class="object-row">
+          <span class="swatch red"></span>
+          <div><span>Error</span><b id="metricError">0</b></div>
+        </div>
+        <div class="object-row">
+          <span class="swatch teal"></span>
+          <div><span>Área total</span><b id="metricTotal">0</b></div>
+        </div>
+      </section>
+    </aside>
+
+    <main class="graph-shell" aria-label="Vista gráfica">
+      <div class="graph-head">
+        <div class="graph-title">
+          <i data-lucide="activity"></i>
+          <span id="graphExpression">f(x)=sin(x)+0.5x</span>
+        </div>
+        <div class="graph-badges">
+          <span id="badgeMethod">Punto medio</span>
+          <span id="badgeInterval">[-2, 4]</span>
+          <span id="badgeRows">40 filas</span>
+        </div>
+      </div>
+      <div id="plotlyGraph"></div>
+      <div class="command-bar">
+        <span>Entrada</span>
+        <input id="commandInput" type="text" value="f(x)=sin(x)+0.5*x" spellcheck="false" autocomplete="off">
+        <button id="commandApplyBtn" class="icon-btn primary" type="button" title="Aplicar entrada"><i data-lucide="corner-down-left"></i></button>
+      </div>
+    </main>
+
+    <aside class="details-panel" aria-label="Detalles">
+      <div class="tabs">
+        <button class="tab active" type="button" data-t="pTabla"><i data-lucide="table-2"></i><span>Tabla</span></button>
+        <button class="tab" type="button" data-t="pFormulas"><i data-lucide="function-square"></i><span>Fórmulas</span></button>
+        <button class="tab" type="button" data-t="pResolve"><i data-lucide="book-open"></i><span>Pasos</span></button>
+      </div>
+
+      <div class="panes">
+        <section id="pImport" class="pane">
+          <div class="import-card">
+            <div class="import-head">
+              <span class="assistant-mark">UP</span>
+              <div>
+                <strong>Importar archivo</strong>
+                <p>Carga texto, imagen o PDF y mide áreas sobre hoja A4.</p>
+              </div>
+            </div>
+            <div class="action-row">
+              <button id="importBrowseBtn" class="text-btn primary" type="button">Seleccionar archivo</button>
+              <button id="a4RemoveFileBtn" class="text-btn" type="button">Quitar archivo</button>
+              <button id="a4UndoBtn" class="text-btn" type="button">Deshacer punto</button>
+              <button id="a4ClearBtn" class="text-btn" type="button">Limpiar puntos</button>
+            </div>
+            <div class="import-help">
+              <p>Texto/JSON configura la función. Imagen/PDF se renderiza sobre A4.</p>
+              <p>Haz clic rodeando el área. Con 3 o más puntos se cierra la figura y se llena con rectángulos de punto medio.</p>
+            </div>
+            <div class="a4-workbench">
+              <div class="a4-canvas-wrap">
+                <canvas id="a4Canvas" width="700" height="990" aria-label="Hoja A4 para seleccionar puntos"></canvas>
+              </div>
+              <div class="a4-side">
+                <div class="a4-metric"><span>Archivo</span><b id="a4FileName">Sin archivo</b></div>
+                <div class="a4-metric"><span>Puntos</span><b id="a4PointCount">0</b></div>
+                <div class="a4-metric"><span>Rectángulos</span><b id="a4RectCount">0</b></div>
+                <div class="a4-metric"><span>Área Riemann</span><b id="a4AreaCm">0 cm²</b></div>
+                <div class="a4-metric"><span>Escala A4</span><b>21 × 29.7 cm</b></div>
+                <div id="a4PointList" class="a4-point-list"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="pTabla" class="pane show">
+          <div class="table-meta">
+            <strong>Rectángulos</strong>
+            <span id="tableNote">Mostrando filas calculadas</span>
+          </div>
+          <div class="twrap">
+            <table>
+              <thead>
+                <tr><th>i</th><th>Intervalo</th><th>xᵢ*</th><th>f(xᵢ*)</th><th>Área</th><th>Σ</th></tr>
+              </thead>
+              <tbody id="rectTable"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="pFormulas" class="pane">
+          <div class="formula-list">
+            <div class="formula-row"><span>Ancho</span><div id="f1"></div></div>
+            <div class="formula-row"><span>Partición</span><div id="f2"></div></div>
+            <div class="formula-row"><span>Izquierda</span><div id="f3"></div></div>
+            <div class="formula-row"><span>Derecha</span><div id="f4"></div></div>
+            <div class="formula-row"><span>Punto medio</span><div id="f5"></div></div>
+            <div class="formula-row"><span>Suma</span><div id="f6"></div></div>
+            <div class="formula-row highlight"><span>Integral</span><div id="f7"></div></div>
+          </div>
+        </section>
+
+        <section id="pResolve" class="pane">
+          <div id="stepsTimeline" class="steps"></div>
+        </section>
+
+        <section id="pTools" class="pane">
+          <div id="sInt" class="spane show">
+            <div class="solver-head">
+              <div>
+                <strong>Solucionador de integrales</strong>
+                <p>Detecta reglas, fracciones parciales, resultado exacto y decimal.</p>
+              </div>
+              <span id="solverModeBadge">Integral</span>
+            </div>
+            <label class="field field-wide">
+              <span>Integrando</span>
+              <input id="integralExpr" type="text" value="(x + 5)/(x**2 + 3*x + 2)" spellcheck="false">
+            </label>
+            <div id="integralPreview" class="math-preview"></div>
+            <div class="grid-two">
+              <label class="field"><span>a</span><input id="integralA" type="text" placeholder="0"></label>
+              <label class="field"><span>b</span><input id="integralB" type="text" placeholder="1"></label>
+            </div>
+            <div class="math-keypad" aria-label="Teclado matemático">
+              <button type="button" data-mode="indef">∫ indef.</button>
+              <button type="button" data-mode="def">∫ definida</button>
+              <button type="button" data-insert="sum(">Σ</button>
+              <button type="button" data-insert="lim(">lim</button>
+              <button type="button" data-insert="d/dx(">d/dx</button>
+              <button type="button" data-insert="x">x</button>
+              <button type="button" data-insert="0">0</button>
+              <button type="button" data-insert="1">1</button>
+              <button type="button" data-insert="2">2</button>
+              <button type="button" data-insert="3">3</button>
+              <button type="button" data-insert="4">4</button>
+              <button type="button" data-insert="5">5</button>
+              <button type="button" data-insert="6">6</button>
+              <button type="button" data-insert="7">7</button>
+              <button type="button" data-insert="8">8</button>
+              <button type="button" data-insert="9">9</button>
+              <button type="button" data-insert=".">.</button>
+              <button type="button" data-insert="x">x</button>
+              <button type="button" data-insert="**2">x²</button>
+              <button type="button" data-insert="**">xⁿ</button>
+              <button type="button" data-insert="**(-1)">x⁻¹</button>
+              <button type="button" data-insert="sqrt(">√</button>
+              <button type="button" data-insert="abs(">|x|</button>
+              <button type="button" data-insert="sin(">sin</button>
+              <button type="button" data-insert="cos(">cos</button>
+              <button type="button" data-insert="tan(">tan</button>
+              <button type="button" data-insert="sec(">sec</button>
+              <button type="button" data-insert="csc(">csc</button>
+              <button type="button" data-insert="cot(">cot</button>
+              <button type="button" data-insert="asin(">asin</button>
+              <button type="button" data-insert="acos(">acos</button>
+              <button type="button" data-insert="atan(">atan</button>
+              <button type="button" data-insert="ln(">ln</button>
+              <button type="button" data-insert="log(">log</button>
+              <button type="button" data-insert="exp(">exp</button>
+              <button type="button" data-insert="pi">π</button>
+              <button type="button" data-insert="e">e</button>
+              <button type="button" data-template="fraction">a/b</button>
+              <button type="button" data-insert="/">÷</button>
+              <button type="button" data-insert="(">(</button>
+              <button type="button" data-insert=")">)</button>
+              <button type="button" data-insert="+">+</button>
+              <button type="button" data-insert="-">−</button>
+              <button type="button" data-insert="*">×</button>
+              <button type="button" data-insert=",">,</button>
+              <button type="button" data-action="backspace">⌫</button>
+              <button type="button" data-action="clear">C</button>
+            </div>
+            <div class="action-row">
+              <button id="integralSolveBtn" class="text-btn primary" type="button">Resolver</button>
+              <button id="integralExampleBtn" class="text-btn" type="button">Ejemplo</button>
+              <button id="integralUseMainBtn" class="text-btn" type="button">Usar f(x)</button>
+            </div>
+            <div id="solverSummary" class="solver-summary"></div>
+            <div id="integralResult" class="result-box"></div>
+            <div id="integralSteps" class="steps compact"></div>
+          </div>
+        </section>
+
+        <section id="pAssistant" class="pane">
+          <div class="assistant-card">
+            <div class="assistant-head">
+              <span class="assistant-mark">AI</span>
+              <div>
+                <strong>Asistente</strong>
+                <p id="assistantContext">Hola, ¿en qué te puedo ayudar?</p>
+              </div>
+              <button id="assistantSettingsBtn" class="icon-btn ghost assistant-settings" type="button" title="Configurar API IA"><i data-lucide="settings"></i></button>
+            </div>
+            <div id="assistantSettingsPanel" class="assistant-settings-panel">
+              <label class="field field-wide">
+                <span>Proveedor IA</span>
+                <select id="aiProviderInput">
+                  <option value="openai-compatible" selected>OpenAI compatible</option>
+                  <option value="gemini">Gemini</option>
+                  <option value="anthropic">Anthropic Claude</option>
+                  <option value="openai-responses">OpenAI Responses</option>
+                  <option value="custom">Personalizado</option>
+                </select>
+              </label>
+              <label class="field field-wide">
+                <span>Endpoint</span>
+                <input id="nvidiaEndpointInput" type="text" value="https://integrate.api.nvidia.com/v1/chat/completions" spellcheck="false">
+              </label>
+              <label class="field field-wide">
+                <span>API key visible (dev)</span>
+                <input id="nvidiaApiKeyInput" type="text" placeholder="sk-..., nvapi-..., claude-..., AIza..." spellcheck="false" autocomplete="off">
+              </label>
+              <label class="field field-wide">
+                <span>Modelo</span>
+                <input id="nvidiaModelInput" type="text" value="nvidia/llama-3.1-nemotron-ultra-253b-v1" spellcheck="false">
+              </label>
+              <div class="grid-three">
+                <label class="field">
+                  <span>Tokens</span>
+                  <input id="aiMaxTokensInput" type="number" value="2048" min="1" step="1">
+                </label>
+                <label class="field">
+                  <span>Temperatura</span>
+                  <input id="aiTemperatureInput" type="number" value="0.2" min="0" max="2" step="0.1">
+                </label>
+                <label class="field">
+                  <span>Top p</span>
+                  <input id="aiTopPInput" type="number" value="1" min="0" max="1" step="0.05">
+                </label>
+              </div>
+              <div class="action-row">
+                <button id="saveNvidiaConfigBtn" class="text-btn primary" type="button">Guardar configuración</button>
+                <button id="testAiConfigBtn" class="text-btn" type="button">Probar API</button>
+                <button id="clearNvidiaConfigBtn" class="text-btn" type="button">Borrar</button>
+              </div>
+              <div id="nvidiaConfigStatus" class="assistant-output mini">Configuracion unica: esta IA alimenta el Asistente y la ayuda de todas las secciones.</div>
+            </div>
+            <div id="assistantOutput" class="assistant-output">Hola, ¿en qué te puedo ayudar?</div>
+            <div class="chatbot-box">
+              <div id="chatMessages" class="chat-messages">
+                <div class="chat-message bot">Hola, ¿en qué te puedo ayudar?</div>
+              </div>
+              <div class="chat-input-row">
+                <input id="chatInput" type="text" placeholder="Escribe tu pregunta..." spellcheck="false">
+                <button id="chatSendBtn" class="text-btn primary" type="button">Enviar</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="pGames" class="pane">
+          <div class="games-card">
+            <div class="games-head">
+              <span class="assistant-mark">JG</span>
+              <div>
+                <strong>Juegos</strong>
+                <p>Clasifica ejercicios con burbujas y refuerza el mÃ©todo correcto.</p>
+              </div>
+            </div>
+            <div class="game-tabs" role="group" aria-label="Juegos disponibles">
+              <button id="integralGameTab" class="game-tab is-active" type="button" data-game="integrals">Integrales</button>
+              <button id="derivativeGameTab" class="game-tab" type="button" data-game="derivatives">Derivadas</button>
+            </div>
+            <div class="game-panel">
+              <div class="game-question">
+                <span id="gameKind">Integrales</span>
+                <strong id="gameExpression">âˆ« x^2 dx</strong>
+                <p id="gamePrompt">Elige el mÃ©todo que resuelve el ejercicio.</p>
+              </div>
+              <div id="bubbleArena" class="bubble-arena" aria-label="Opciones del juego"></div>
+              <div class="game-feedback">
+                <div>
+                  <span>Puntaje</span>
+                  <b id="gameScore">0/0</b>
+                </div>
+                <p id="gameFeedbackText">Toca una burbuja para empezar.</p>
+              </div>
+              <div class="action-row">
+                <button id="gameNextBtn" class="text-btn primary" type="button">Siguiente</button>
+                <button id="gameResetBtn" class="text-btn" type="button">Reiniciar juego</button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </aside>
+  </div>
+
+  <div id="sectionAiHelp" class="section-ai-help" aria-live="polite">
+    <button id="sectionAiToggle" class="section-ai-toggle" type="button" title="Ayuda IA"><i data-lucide="sparkles"></i><span>IA</span></button>
+    <div id="sectionAiPanel" class="section-ai-panel">
+      <div class="section-ai-head">
+        <span class="assistant-mark">IA</span>
+        <div>
+          <strong id="sectionAiTitle">Ayuda de sección</strong>
+          <p id="sectionAiHint">Hola, ¿en qué te puedo ayudar?</p>
+          <span id="sectionAiProvider" class="section-ai-provider">Misma API del asistente</span>
+        </div>
+        <button id="sectionAiClose" class="icon-btn ghost" type="button" title="Cerrar ayuda"><i data-lucide="x"></i></button>
+      </div>
+      <div id="sectionAiMessages" class="section-ai-messages">
+        <div class="chat-message bot">Hola, ¿en qué te puedo ayudar?</div>
+      </div>
+      <div class="chat-input-row">
+        <input id="sectionAiInput" type="text" placeholder="Pregunta sobre esta sección..." spellcheck="false">
+        <button id="sectionAiSend" class="text-btn primary" type="button">Enviar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.7/dist/gsap.min.js"></script>
+  <script src="https://unpkg.com/lucide@0.263.1/dist/umd/lucide.min.js"></script>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="./riemann_sumas_javascript.js"></script>
+</body>
+</html>
