@@ -2,10 +2,38 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
 import urllib.error
+import urllib.parse
 import urllib.request
 
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
+HOST = "127.0.0.1"
+PORT = 5174
+MAX_BODY_BYTES = 64 * 1024
+LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
+
+
+def number_param(config, key, default, low, high, cast=float):
+    value = config.get(key)
+    if value is None or value == "":
+        return default
+    try:
+        number = cast(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"El parámetro {key} debe ser numérico.")
+    if number != number:  # NaN
+        raise ValueError(f"El parámetro {key} debe ser numérico.")
+    return min(high, max(low, number))
+
+
+def validate_endpoint(endpoint):
+    parsed = urllib.parse.urlparse(endpoint)
+    host = (parsed.hostname or "").lower()
+    if parsed.scheme == "https" and host:
+        return endpoint
+    if parsed.scheme == "http" and host in LOCAL_HOSTS:
+        return endpoint
+    raise ValueError("El endpoint debe ser una URL https:// (http:// solo para servidores locales).")
 
 
 def infer_provider(config):
@@ -65,14 +93,17 @@ def build_request(config):
     endpoint = (config.get("endpoint") or "").strip()
     api_key = (config.get("apiKey") or "").strip()
     model = (config.get("model") or "").strip()
-    question = config.get("question") or ""
-    system_prompt = config.get("systemPrompt") or "Responde en español."
-    max_tokens = int(config.get("maxTokens") or 700)
-    temperature = float(config.get("temperature") if config.get("temperature") is not None else 0.2)
-    top_p = float(config.get("topP") if config.get("topP") is not None else 1)
+    question = str(config.get("question") or "")
+    system_prompt = str(config.get("systemPrompt") or "Responde en español.")
+    max_tokens = number_param(config, "maxTokens", 700, 1, 8192, cast=lambda v: int(float(v)))
+    temperature = number_param(config, "temperature", 0.2, 0.0, 2.0)
+    top_p = number_param(config, "topP", 1.0, 0.0, 1.0)
 
     if not endpoint or not api_key or not model:
         raise ValueError("Falta endpoint, API key o modelo.")
+    if not question.strip():
+        raise ValueError("Falta la pregunta.")
+    validate_endpoint(endpoint)
 
     headers = {"Content-Type": "application/json", "Accept": "application/json"}
     if provider == "anthropic":
@@ -142,15 +173,47 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(raw)
 
+    def read_json_body(self):
+        content_type = (self.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+        if content_type != "application/json":
+            # Exigir JSON obliga a los navegadores a hacer una petición previa (CORS),
+            # así otra página web no puede usar este proxy local a escondidas.
+            raise PermissionError("Content-Type debe ser application/json.")
+        try:
+            length = int(self.headers.get("Content-Length", ""))
+        except ValueError:
+            raise ValueError("Falta Content-Length válido.")
+        if length <= 0:
+            raise ValueError("La petición está vacía.")
+        if length > MAX_BODY_BYTES:
+            raise OverflowError(f"La petición supera {MAX_BODY_BYTES // 1024} KB.")
+        try:
+            config = json.loads(self.rfile.read(length).decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            raise ValueError("El cuerpo no es JSON válido.")
+        if not isinstance(config, dict):
+            raise ValueError("El cuerpo debe ser un objeto JSON.")
+        return config
+
     def do_POST(self):
         if self.path != "/api/ai":
             self.send_error(404)
             return
 
         try:
-            length = int(self.headers.get("Content-Length", "0"))
-            config = json.loads(self.rfile.read(length).decode("utf-8"))
+            config = self.read_json_body()
             endpoint, headers, body = build_request(config)
+        except PermissionError as error:
+            self.send_json(415, {"error": str(error)})
+            return
+        except OverflowError as error:
+            self.send_json(413, {"error": str(error)})
+            return
+        except ValueError as error:
+            self.send_json(400, {"error": str(error)})
+            return
+
+        try:
             request = urllib.request.Request(
                 endpoint,
                 data=json.dumps(body).encode("utf-8"),
@@ -163,11 +226,19 @@ class Handler(SimpleHTTPRequestHandler):
         except urllib.error.HTTPError as error:
             details = error.read().decode("utf-8", errors="replace")
             self.send_json(error.code, {"error": details[:800]})
+        except urllib.error.URLError as error:
+            self.send_json(502, {"error": f"No se pudo conectar con el proveedor: {error.reason}"})
+        except json.JSONDecodeError:
+            self.send_json(502, {"error": "El proveedor respondió algo que no es JSON."})
         except Exception as error:
             self.send_json(500, {"error": str(error)})
 
 
-if __name__ == "__main__":
-    server = ThreadingHTTPServer(("127.0.0.1", 5174), Handler)
-    print("Dev_Aldah_V3 server running at http://127.0.0.1:5174/riemann_sumas_javascript.html")
+def main():
+    server = ThreadingHTTPServer((HOST, PORT), Handler)
+    print(f"Dev_Aldah_V3 server running at http://{HOST}:{PORT}/index.html")
     server.serve_forever()
+
+
+if __name__ == "__main__":
+    main()

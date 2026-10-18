@@ -1630,3 +1630,73 @@ td[colspan="6"]{
     display:none;
   }
 }
+
+/* ── Estados de validación y retroalimentación ─────────────────────────────── */
+.field:has([aria-invalid="true"]),
+.n-number:has([aria-invalid="true"]){
+  border-color:var(--red);
+  box-shadow:0 0 0 3px rgba(220,38,38,.12);
+}
+.field [aria-invalid="true"],
+.n-number [aria-invalid="true"]{
+  color:var(--red);
+}
+.result-box.is-error{
+  color:var(--red);
+}
+.solver-summary .summary-note{
+  grid-column:1 / -1;
+  border-color:#fed7aa;
+  background:#fff7ed;
+}
+.solver-summary .summary-note b{
+  color:#9a5b00;
+  font-family:inherit;
+  font-weight:600;
+  white-space:normal;
+}
+.a4-warning{
+  color:#9a5b00;
+  font-weight:600;
+}
+
+/* Respuesta inmediata al presionar, no al soltar */
+.text-btn:active,
+.icon-btn:active,
+.chip:active,
+.seg-btn:active,
+.section-tab:active,
+.math-keypad button:active,
+.bubble-option:active:not(:disabled){
+  transform:scale(.97);
+  transition:transform 80ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce){
+  *,
+  *::before,
+  *::after{
+    animation-duration:1ms !important;
+    animation-iteration-count:1 !important;
+    transition-duration:1ms !important;
+    scroll-behavior:auto !important;
+  }
+  .text-btn:active,
+  .icon-btn:active,
+  .chip:active,
+  .seg-btn:active,
+  .section-tab:active,
+  .math-keypad button:active,
+  .bubble-option:active:not(:disabled){
+    transform:none;
+  }
+}
+
+/* Resultados de la última entrada válida mientras la actual tiene un error */
+.workspace.is-stale .object-list,
+.workspace.is-stale #plotlyGraph,
+.workspace.is-stale #pTabla,
+.workspace.is-stale #stepsTimeline{
+  opacity:.45;
+  transition:opacity 120ms ease-out;
+}

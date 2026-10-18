@@ -29,7 +29,7 @@
     </nav>
     <input id="importFileInput" class="sr-only" type="file" accept=".txt,.csv,.json,.png,.jpg,.jpeg,.webp,.pdf,image/*,application/pdf" aria-label="Importar archivo">
 
-    <div id="statusBar" class="status-pill">Listo</div>
+    <div id="statusBar" class="status-pill" role="status" aria-live="polite">Listo</div>
 
     <div class="top-actions">
       <button id="resetBtn" class="icon-btn" type="button" title="Reiniciar"><i data-lucide="rotate-ccw"></i></button>
@@ -183,6 +183,7 @@
                 <div class="a4-metric"><span>Puntos</span><b id="a4PointCount">0</b></div>
                 <div class="a4-metric"><span>Rectángulos</span><b id="a4RectCount">0</b></div>
                 <div class="a4-metric"><span>Área Riemann</span><b id="a4AreaCm">0 cm²</b></div>
+                <div class="a4-metric"><span>Área exacta del polígono</span><b id="a4PolygonArea">0 cm²</b></div>
                 <div class="a4-metric"><span>Escala A4</span><b>21 × 29.7 cm</b></div>
                 <div id="a4PointList" class="a4-point-list"></div>
               </div>
@@ -226,7 +227,7 @@
             <div class="solver-head">
               <div>
                 <strong>Solucionador de integrales</strong>
-                <p>Detecta reglas, fracciones parciales, resultado exacto y decimal.</p>
+                <p>Primitiva verificada, fracciones parciales, integrales impropias y decimal.</p>
               </div>
               <span id="solverModeBadge">Integral</span>
             </div>
@@ -236,15 +237,13 @@
             </label>
             <div id="integralPreview" class="math-preview"></div>
             <div class="grid-two">
-              <label class="field"><span>a</span><input id="integralA" type="text" placeholder="0"></label>
-              <label class="field"><span>b</span><input id="integralB" type="text" placeholder="1"></label>
+              <label class="field"><span>a</span><input id="integralA" type="text" placeholder="0, -inf, pi/2" spellcheck="false" autocomplete="off"></label>
+              <label class="field"><span>b</span><input id="integralB" type="text" placeholder="1, inf, sqrt(2)" spellcheck="false" autocomplete="off"></label>
             </div>
             <div class="math-keypad" aria-label="Teclado matemático">
               <button type="button" data-mode="indef">∫ indef.</button>
               <button type="button" data-mode="def">∫ definida</button>
-              <button type="button" data-insert="sum(">Σ</button>
-              <button type="button" data-insert="lim(">lim</button>
-              <button type="button" data-insert="d/dx(">d/dx</button>
+              <button type="button" data-insert="inf" title="Infinito para límites de integración">∞</button>
               <button type="button" data-insert="x">x</button>
               <button type="button" data-insert="0">0</button>
               <button type="button" data-insert="1">1</button>
@@ -257,7 +256,6 @@
               <button type="button" data-insert="8">8</button>
               <button type="button" data-insert="9">9</button>
               <button type="button" data-insert=".">.</button>
-              <button type="button" data-insert="x">x</button>
               <button type="button" data-insert="**2">x²</button>
               <button type="button" data-insert="**">xⁿ</button>
               <button type="button" data-insert="**(-1)">x⁻¹</button>
@@ -273,7 +271,7 @@
               <button type="button" data-insert="acos(">acos</button>
               <button type="button" data-insert="atan(">atan</button>
               <button type="button" data-insert="ln(">ln</button>
-              <button type="button" data-insert="log(">log</button>
+              <button type="button" data-insert="log10(" title="Logaritmo en base 10">log₁₀</button>
               <button type="button" data-insert="exp(">exp</button>
               <button type="button" data-insert="pi">π</button>
               <button type="button" data-insert="e">e</button>
@@ -294,7 +292,7 @@
               <button id="integralUseMainBtn" class="text-btn" type="button">Usar f(x)</button>
             </div>
             <div id="solverSummary" class="solver-summary"></div>
-            <div id="integralResult" class="result-box"></div>
+            <div id="integralResult" class="result-box" aria-live="polite"></div>
             <div id="integralSteps" class="steps compact"></div>
           </div>
         </section>
@@ -372,7 +370,7 @@
               <span class="assistant-mark">JG</span>
               <div>
                 <strong>Juegos</strong>
-                <p>Clasifica ejercicios con burbujas y refuerza el mÃ©todo correcto.</p>
+                <p>Clasifica ejercicios con burbujas y refuerza el método correcto.</p>
               </div>
             </div>
             <div class="game-tabs" role="group" aria-label="Juegos disponibles">
@@ -382,8 +380,8 @@
             <div class="game-panel">
               <div class="game-question">
                 <span id="gameKind">Integrales</span>
-                <strong id="gameExpression">âˆ« x^2 dx</strong>
-                <p id="gamePrompt">Elige el mÃ©todo que resuelve el ejercicio.</p>
+                <strong id="gameExpression">∫ x^2 dx</strong>
+                <p id="gamePrompt">Elige el método que resuelve el ejercicio.</p>
               </div>
               <div id="bubbleArena" class="bubble-arena" aria-label="Opciones del juego"></div>
               <div class="game-feedback">
@@ -431,6 +429,7 @@
   <script src="https://unpkg.com/lucide@0.263.1/dist/umd/lucide.min.js"></script>
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="./integral_core.js"></script>
   <script src="./riemann_sumas_javascript.js"></script>
 </body>
 </html>

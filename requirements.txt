@@ -1,3 +1,2 @@
-PySide6
-numpy
-sympy
+# riemann_ai_server.py solo usa la biblioteca estándar de Python (3.8+).
+# No hay dependencias externas que instalar.

@@ -1,51 +1,21 @@
 "use strict";
 
-const MAX_N = 20000;
-const INFINITE_N = 1800;
 const MAX_DRAW_BARS = 260;
 const TABLE_EDGE_ROWS = 22;
 const TABLE_MID_ROWS = 10;
 
 const $ = id => document.getElementById(id);
 
-const M = {
-  sin: Math.sin,
-  cos: Math.cos,
-  tan: Math.tan,
-  asin: Math.asin,
-  acos: Math.acos,
-  atan: Math.atan,
-  sqrt: Math.sqrt,
-  abs: Math.abs,
-  exp: Math.exp,
-  log: Math.log,
-  ln: Math.log,
-  log10: Math.log10,
-  pow: Math.pow,
-  min: Math.min,
-  max: Math.max,
-  floor: Math.floor,
-  ceil: Math.ceil,
-  round: Math.round,
-  sinh: Math.sinh,
-  cosh: Math.cosh,
-  tanh: Math.tanh,
-  sec: x => 1 / Math.cos(x),
-  csc: x => 1 / Math.sin(x),
-  cot: x => 1 / Math.tan(x),
-  pi: Math.PI,
-  PI: Math.PI,
-  e: Math.E,
-  E: Math.E
-};
-
 const STATE = {
   fn: null,
   input: null,
   data: null,
   exact: 0,
+  integral: null,
   areas: { pos: 0, neg: 0, net: 0, total: 0 }
 };
+
+const REDUCED_MOTION = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 const A4 = {
   widthCm: 21,
@@ -80,26 +50,26 @@ const SECTION_HELP = {
   },
   games: {
     title: "Ayuda IA: Juegos",
-    hint: "Hola, en que te puedo ayudar con los juegos?",
-    reply: "En Juegos toca la burbuja del metodo correcto. Integrales practica inmediata, fracciones parciales, cambio de variable y partes; Derivadas practica reglas basicas, producto, cociente y cadena."
+    hint: "Hola, ¿en qué te puedo ayudar con los juegos?",
+    reply: "En Juegos toca la burbuja del método correcto. Integrales practica inmediata, fracciones parciales, cambio de variable y partes; Derivadas practica reglas básicas, producto, cociente y cadena."
   }
 };
 
 const GAME_BANKS = {
   integrals: {
     label: "Integrales",
-    prompt: "Elige el metodo que resuelve la integral.",
+    prompt: "Elige el método que resuelve la integral.",
     options: [
-      "Integracion inmediata",
+      "Integración inmediata",
       "Fracciones parciales",
       "Cambio de variable",
-      "Integracion por partes"
+      "Integración por partes"
     ],
     items: [
       {
         tex: "\\int x^2\\,dx",
         linear: "integral x^2 dx",
-        answer: "Integracion inmediata",
+        answer: "Integración inmediata",
         result: "1/3*x^3 + C",
         fraction: "1/3",
         why: "Regla de potencia: integral x^n dx = x^(n+1)/(n+1) + C."
@@ -107,7 +77,7 @@ const GAME_BANKS = {
       {
         tex: "\\int \\ln(x)\\,dx",
         linear: "integral ln(x) dx",
-        answer: "Integracion por partes",
+        answer: "Integración por partes",
         result: "x*ln(abs(x)) - x + C",
         fraction: "",
         why: "Usa partes con u = ln(x) y dv = dx."
@@ -131,7 +101,7 @@ const GAME_BANKS = {
       {
         tex: "\\int e^x\\,dx",
         linear: "integral exp(x) dx",
-        answer: "Integracion inmediata",
+        answer: "Integración inmediata",
         result: "exp(x) + C",
         fraction: "",
         why: "La exponencial se integra directamente."
@@ -140,7 +110,7 @@ const GAME_BANKS = {
   },
   derivatives: {
     label: "Derivadas",
-    prompt: "Elige la regla de derivacion.",
+    prompt: "Elige la regla de derivación.",
     options: [
       "Potencia",
       "Producto",
@@ -178,7 +148,7 @@ const GAME_BANKS = {
         answer: "Cadena",
         result: "2*x*cos(x^2)",
         fraction: "",
-        why: "Funcion externa sin(u) con u = x^2."
+        why: "Función externa sin(u) con u = x^2."
       },
       {
         tex: "\\frac{d}{dx}\\sqrt{x+1}",
@@ -186,7 +156,7 @@ const GAME_BANKS = {
         answer: "Cadena",
         result: "1/(2*sqrt(x + 1))",
         fraction: "1/(2*sqrt(x + 1))",
-        why: "Raiz de una funcion interna."
+        why: "Raíz de una función interna."
       }
     ]
   }
@@ -200,454 +170,49 @@ const GAME_STATE = {
   locked: false
 };
 
-function normalize(raw) {
-  let s = String(raw || "").trim();
-  s = s.replace(/^f\s*\(\s*x\s*\)\s*=/i, "");
-  s = s.replace(/\^/g, "**");
-  s = s.replace(/√/g, "sqrt");
-  s = s.replace(/\bsen\b/gi, "sin");
-  s = s.replace(/\btg\b/gi, "tan");
-  s = s.replace(/\bctg\b/gi, "cot");
-  s = s.replace(/\barc\s*tg\b/gi, "atan");
-  s = s.replace(/\bln\s*x\b/gi, "ln(x)");
-  s = s.replace(/\blog\s*x\b/gi, "log(x)");
-  s = s.replace(/\bsin\s*x\b/gi, "sin(x)");
-  s = s.replace(/\bcos\s*x\b/gi, "cos(x)");
-  s = s.replace(/\btan\s*x\b/gi, "tan(x)");
-
-  s = s.replace(/(\d)([a-zA-Z])/g, "$1*$2");
-  s = s.replace(/(\d|x|X|\))\s*\(/g, "$1*(");
-  s = s.replace(/\)\s*(\d|[a-zA-Z])/g, ")*$1");
-  s = s.replace(/\)\s*\(/g, ")*(");
-  return s;
-}
-
-function compile(expression) {
-  const s = normalize(expression);
-  if (!s) throw new Error("Escribe una función.");
-
-  const ids = s.match(/[a-zA-Z_]\w*/g) || [];
-  for (const name of ids) {
-    if (name !== "x" && !(name in M)) throw new Error(`Símbolo desconocido: ${name}`);
+// Marca un campo como inválido junto al control (validación en línea).
+function markField(id, message = "") {
+  const el = $(id);
+  if (!el) return;
+  if (message) {
+    el.setAttribute("aria-invalid", "true");
+    el.title = message;
+  } else {
+    el.removeAttribute("aria-invalid");
+    el.removeAttribute("title");
   }
-
-  const names = Object.keys(M);
-  const values = Object.values(M);
-  const fn = new Function("x", ...names, `"use strict"; return (${s});`);
-  return x => {
-    try {
-      const y = Number(fn(x, ...values));
-      return Number.isFinite(y) ? y : NaN;
-    } catch (_) {
-      return NaN;
-    }
-  };
 }
 
-function finiteOrZero(fn, x) {
-  const y = fn(x);
-  return Number.isFinite(y) ? y : 0;
-}
-
-function fmt(value, digits = 5) {
-  if (!Number.isFinite(value)) return "NaN";
-  if (value !== 0 && (Math.abs(value) >= 1e5 || Math.abs(value) < 1e-4)) {
-    return value.toExponential(3);
+function readNumberField(id, label) {
+  const raw = $(id).value.trim();
+  if (raw === "") {
+    markField(id, `Escribe ${label}.`);
+    throw new Error(`Falta el valor de ${label}.`);
   }
-  return Number(value.toFixed(digits)).toString();
-}
-
-function approximateFraction(value, maxDenominator = 10000) {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return null;
-  const sign = numeric < 0 ? -1 : 1;
-  let x = Math.abs(numeric);
-  if (Math.abs(x - Math.round(x)) < 1e-12) {
-    return { numerator: sign * Math.round(x), denominator: 1, value: numeric };
+  const value = Number(raw);
+  if (!Number.isFinite(value)) {
+    markField(id, `${label} debe ser un número.`);
+    throw new Error(`${label} debe ser un número finito.`);
   }
-
-  let previousNumerator = 0;
-  let numerator = 1;
-  let previousDenominator = 1;
-  let denominator = 0;
-  let guard = 0;
-
-  while (guard++ < 24) {
-    const whole = Math.floor(x);
-    const nextNumerator = whole * numerator + previousNumerator;
-    const nextDenominator = whole * denominator + previousDenominator;
-    if (nextDenominator > maxDenominator) break;
-    previousNumerator = numerator;
-    previousDenominator = denominator;
-    numerator = nextNumerator;
-    denominator = nextDenominator;
-    const rest = x - whole;
-    if (Math.abs(rest) < 1e-12) break;
-    x = 1 / rest;
-  }
-
-  if (!denominator) return null;
-  return {
-    numerator: sign * numerator,
-    denominator,
-    value: sign * numerator / denominator
-  };
-}
-
-function fractionApproxText(value, maxDenominator = 10000, tolerance = 1e-9) {
-  const fraction = approximateFraction(value, maxDenominator);
-  if (!fraction || fraction.denominator === 1) return null;
-  if (Math.abs(fraction.value - Number(value)) > tolerance) return null;
-  return `${fraction.numerator}/${fraction.denominator}`;
-}
-
-function numberExpr(value, digits = 8) {
-  if (!Number.isFinite(Number(value))) return "NaN";
-  if (Math.abs(Number(value)) < 1e-12) return "0";
-  const fraction = fractionApproxText(value, 1000, 1e-10);
-  if (fraction && fraction.length <= fmt(Number(value), digits).length + 2) return fraction;
-  return fmt(Number(value), digits);
-}
-
-function positiveNumberExpr(value, digits = 8) {
-  return numberExpr(Math.abs(Number(value)), digits).replace(/^-/, "");
-}
-
-function displayExpr(expr) {
-  return String(expr || "")
-    .replace(/\s+/g, "")
-    .replace(/\*\*/g, "^")
-    .replace(/\*/g, "·");
-}
-
-function methodLabel(method) {
-  return { left: "Izquierda", right: "Derecha", midpoint: "Punto medio" }[method] || "Punto medio";
-}
-
-function clampN(value) {
-  return Math.max(1, Math.min(MAX_N, parseInt(value, 10) || 1));
-}
-
-function simpson(fn, a, b) {
-  if (a === b) return 0;
-  const left = Math.min(a, b);
-  const right = Math.max(a, b);
-  const sign = b >= a ? 1 : -1;
-  let segments = 1800;
-  if (segments % 2) segments++;
-  const h = (right - left) / segments;
-  let sum = finiteOrZero(fn, left) + finiteOrZero(fn, right);
-
-  for (let i = 1; i < segments; i++) {
-    sum += finiteOrZero(fn, left + i * h) * (i % 2 ? 4 : 2);
-  }
-  return sign * sum * h / 3;
-}
-
-function riemann(fn, a, b, n, method) {
-  const dx = (b - a) / n;
-  const rects = [];
-  let total = 0;
-
-  for (let i = 1; i <= n; i++) {
-    const p = a + (i - 1) * dx;
-    const q = a + i * dx;
-    let sample = p;
-    if (method === "right") sample = q;
-    if (method === "midpoint") sample = (p + q) / 2;
-
-    const y = finiteOrZero(fn, sample);
-    const area = y * dx;
-    total += area;
-    rects.push({
-      i,
-      p,
-      q,
-      x0: Math.min(p, q),
-      x1: Math.max(p, q),
-      sample,
-      y,
-      area,
-      cum: total
-    });
-  }
-  return { dx, rects, sum: total };
-}
-
-function signedAreas(fn, a, b) {
-  const left = Math.min(a, b);
-  const right = Math.max(a, b);
-  const slices = 1800;
-  const dx = (right - left) / slices;
-  let pos = 0;
-  let neg = 0;
-
-  for (let i = 0; i < slices; i++) {
-    const area = finiteOrZero(fn, left + (i + 0.5) * dx) * dx;
-    if (area >= 0) pos += area;
-    else neg += area;
-  }
-  return { pos, neg, net: pos + neg, total: pos + Math.abs(neg) };
+  markField(id);
+  return value;
 }
 
 function readInputs() {
   const expr = $("exprInput").value.trim();
-  const a = Number($("aInput").value);
-  const b = Number($("bInput").value);
+  const a = readNumberField("aInput", "a");
+  const b = readNumberField("bInput", "b");
+  const rawN = parseInt($("nInput").value, 10);
   const manualN = clampN($("nInput").value);
   const n = $("infinityInput").checked ? INFINITE_N : manualN;
   const method = $("methodInput").value;
 
-  if (!Number.isFinite(a) || !Number.isFinite(b) || a === b) {
-    throw new Error("Intervalo inválido.");
+  if (a === b) {
+    markField("bInput", "b debe ser distinto de a.");
+    throw new Error("El intervalo es vacío: a y b deben ser distintos.");
   }
-  return { expr, a, b, n, manualN, method };
-}
-
-function exprToLatex(raw) {
-  let s = String(raw || "").trim();
-  s = s.replace(/^f\s*\(\s*x\s*\)\s*=/i, "");
-  s = s.replace(/sum\(/g, "\\sum(");
-  s = s.replace(/\*\*\(([^)]+)\)/g, "^{$1}");
-  s = s.replace(/\*\*([-+]?\d+(?:\.\d+)?|[a-zA-Z]+)/g, "^{$1}");
-  s = s.replace(/\^([-+]?\d+(?:\.\d+)?|[a-zA-Z]+)/g, "^{$1}");
-  s = s.replace(/\(([^()]+)\)\/\(([^()]+)\)/g, "\\frac{$1}{$2}");
-  s = s.replace(/([0-9a-zA-Z.*+-]+)\/\(([^()]+)\)/g, "\\frac{$1}{$2}");
-  s = s.replace(/\(([^()]+)\)\/([0-9a-zA-Z.*+-]+)/g, "\\frac{$1}{$2}");
-  s = s.replace(/(\b\d+(?:\.\d+)?|\b[a-zA-Z]\b)\/(\b\d+(?:\.\d+)?|\b[a-zA-Z]\b)/g, "\\frac{$1}{$2}");
-  s = s.replace(/\bsin\b/g, "\\sin");
-  s = s.replace(/\bcos\b/g, "\\cos");
-  s = s.replace(/\btan\b/g, "\\tan");
-  s = s.replace(/\bsec\b/g, "\\sec");
-  s = s.replace(/\bcsc\b/g, "\\csc");
-  s = s.replace(/\bcot\b/g, "\\cot");
-  s = s.replace(/\bln\b/g, "\\ln");
-  s = s.replace(/\blog\b/g, "\\ln");
-  s = s.replace(/\bexp\b/g, "\\exp");
-  s = s.replace(/\batan\b/g, "\\arctan");
-  s = s.replace(/√/g, "\\sqrt{}");
-  s = s.replace(/\bsqrt\(([^)]+)\)/g, "\\sqrt{$1}");
-  s = s.replace(/\babs\(([^)]+)\)/g, "\\left|$1\\right|");
-  s = s.replace(/\bpi\b/g, "\\pi");
-  s = s.replace(/\bPI\b/g, "\\pi");
-  s = s.replace(/(\d)\s*\*\s*([a-zA-Z\\])/g, "$1\\,$2");
-  s = s.replace(/\*/g, "\\cdot ");
-  return s;
-}
-
-function stripOuterParens(text) {
-  let s = String(text || "").trim();
-  let changed = true;
-  while (changed && s.startsWith("(") && s.endsWith(")")) {
-    changed = false;
-    let depth = 0;
-    let wraps = true;
-    for (let i = 0; i < s.length; i++) {
-      if (s[i] === "(") depth++;
-      if (s[i] === ")") depth--;
-      if (depth === 0 && i < s.length - 1) {
-        wraps = false;
-        break;
-      }
-    }
-    if (wraps) {
-      s = s.slice(1, -1).trim();
-      changed = true;
-    }
-  }
-  return s;
-}
-
-function splitTopLevel(text, operators) {
-  const s = String(text || "");
-  const parts = [];
-  let depth = 0;
-  let start = 0;
-  for (let i = 0; i < s.length; i++) {
-    const char = s[i];
-    if (char === "(") depth++;
-    else if (char === ")") depth--;
-    else if (depth === 0 && operators.includes(char) && i > start) {
-      if (char === "*" && (s[i - 1] === "*" || s[i + 1] === "*")) continue;
-      if ((char === "+" || char === "-") && (s[i - 1] === "*" || s[i - 1] === "/" || s[i - 1] === "^")) continue;
-      parts.push({ value: s.slice(start, i), op: parts.length ? s[start - 1] : "+" });
-      start = i + 1;
-    }
-  }
-  parts.push({ value: s.slice(start), op: parts.length ? s[start - 1] : "+" });
-  return parts.filter(part => part.value !== "");
-}
-
-function findTopLevelOperator(text, operator) {
-  const s = String(text || "");
-  let depth = 0;
-  for (let i = s.length - 1; i >= 0; i--) {
-    const char = s[i];
-    if (char === ")") depth++;
-    else if (char === "(") depth--;
-    else if (depth === 0 && char === operator) return i;
-  }
-  return -1;
-}
-
-function findTopLevelPower(text) {
-  const s = String(text || "");
-  let depth = 0;
-  for (let i = s.length - 1; i >= 1; i--) {
-    const char = s[i];
-    if (char === ")") depth++;
-    else if (char === "(") depth--;
-    else if (depth === 0 && s.slice(i - 1, i + 1) === "**") return i - 1;
-  }
-  return -1;
-}
-
-function latexAtom(raw) {
-  let s = stripOuterParens(raw);
-  if (!s) return "";
-
-  const sumParts = splitTopLevel(s, "+-");
-  if (sumParts.length > 1) {
-    return sumParts.map((part, index) => {
-      const value = latexAtom(part.value);
-      if (index === 0) return part.op === "-" ? `-${value}` : value;
-      return `${part.op === "-" ? "-" : "+"}${value}`;
-    }).join(" ");
-  }
-
-  const divisionIndex = findTopLevelOperator(s, "/");
-  if (divisionIndex > 0) return `\\frac{${latexAtom(s.slice(0, divisionIndex))}}{${latexAtom(s.slice(divisionIndex + 1))}}`;
-
-  const productParts = splitTopLevel(s, "*").filter(part => part.value !== "");
-  if (productParts.length > 1) return productParts.map(part => latexAtom(part.value)).join("\\,");
-
-  const powerIndex = findTopLevelPower(s);
-  if (powerIndex > 0) return `${latexAtom(s.slice(0, powerIndex))}^{${latexAtom(s.slice(powerIndex + 2))}}`;
-
-  const fn = s.match(/^([a-zA-Z]+)\((.*)\)$/);
-  if (fn) {
-    const name = fn[1].toLowerCase();
-    const arg = latexAtom(fn[2]);
-    const names = {
-      sin: "\\sin",
-      cos: "\\cos",
-      tan: "\\tan",
-      sec: "\\sec",
-      csc: "\\csc",
-      cot: "\\cot",
-      asin: "\\arcsin",
-      acos: "\\arccos",
-      atan: "\\arctan",
-      log: "\\ln",
-      ln: "\\ln",
-      exp: "\\exp"
-    };
-    if (name === "sqrt") return `\\sqrt{${arg}}`;
-    if (name === "abs") return `\\left|${arg}\\right|`;
-    return `${names[name] || `\\operatorname{${name}}`}\\left(${arg}\\right)`;
-  }
-
-  if (/^pi$/i.test(s)) return "\\pi";
-  if (s === "e") return "e";
-  return s.replace(/\*/g, "\\cdot ");
-}
-
-function exprToLatex(raw) {
-  const cleaned = normalize(String(raw || "").replace(/^f\s*\(\s*x\s*\)\s*=/i, "")).replace(/\s+/g, "");
-  return latexAtom(cleaned);
-}
-
-function hasTopLevelParts(text, operators) {
-  return splitTopLevel(stripOuterParens(text), operators).length > 1;
-}
-
-function hasTopLevelProduct(text) {
-  return hasTopLevelParts(text, "*");
-}
-
-function hasTopLevelSum(text) {
-  return hasTopLevelParts(text, "+-");
-}
-
-function hasTopLevelDivision(text) {
-  return findTopLevelOperator(stripOuterParens(text), "/") > 0;
-}
-
-function isSimpleLinearExpr(text) {
-  return /^-?(?:\d+(?:\.\d+)?|[a-zA-Z]|pi|e|[a-zA-Z]\^-?\d+(?:\.\d+)?|[a-zA-Z]+\([^()]*\))$/.test(String(text || "").trim());
-}
-
-function wrapLinearPart(text) {
-  const value = String(text || "").trim();
-  return isSimpleLinearExpr(value) ? value : `(${value})`;
-}
-
-function wrapLinearFactor(text, raw) {
-  const value = String(text || "").trim();
-  const source = stripOuterParens(raw);
-  return hasTopLevelSum(source) || hasTopLevelDivision(source) ? `(${value})` : value;
-}
-
-function wrapLinearQuotientPart(text, raw, role) {
-  const value = String(text || "").trim();
-  const source = stripOuterParens(raw);
-  if (role === "numerator") {
-    return hasTopLevelSum(source) || hasTopLevelDivision(source) ? `(${value})` : value;
-  }
-  return hasTopLevelSum(source) || hasTopLevelProduct(source) || hasTopLevelDivision(source)
-    ? `(${value})`
-    : value;
-}
-
-function wrapLinearPowerPart(text, raw) {
-  const value = String(text || "").trim();
-  const source = stripOuterParens(raw);
-  return hasTopLevelSum(source) || hasTopLevelProduct(source) || hasTopLevelDivision(source)
-    ? `(${value})`
-    : value;
-}
-
-function linearAtom(raw) {
-  let s = stripOuterParens(raw);
-  if (!s) return "";
-
-  const sumParts = splitTopLevel(s, "+-");
-  if (sumParts.length > 1) {
-    return sumParts.map((part, index) => {
-      const value = linearAtom(part.value);
-      if (index === 0) return part.op === "-" ? `-${value}` : value;
-      return `${part.op === "-" ? "-" : "+"} ${value}`;
-    }).join(" ");
-  }
-
-  const divisionIndex = findTopLevelOperator(s, "/");
-  if (divisionIndex > 0) {
-    const numeratorRaw = s.slice(0, divisionIndex);
-    const denominatorRaw = s.slice(divisionIndex + 1);
-    const numerator = linearAtom(numeratorRaw);
-    const denominator = linearAtom(denominatorRaw);
-    return `${wrapLinearQuotientPart(numerator, numeratorRaw, "numerator")}/${wrapLinearQuotientPart(denominator, denominatorRaw, "denominator")}`;
-  }
-
-  const productParts = splitTopLevel(s, "*").filter(part => part.value !== "");
-  if (productParts.length > 1) return productParts.map(part => wrapLinearFactor(linearAtom(part.value), part.value)).join("*");
-
-  const powerIndex = findTopLevelPower(s);
-  if (powerIndex > 0) {
-    const baseRaw = s.slice(0, powerIndex);
-    const exponentRaw = s.slice(powerIndex + 2);
-    return `${wrapLinearPowerPart(linearAtom(baseRaw), baseRaw)}^${wrapLinearPowerPart(linearAtom(exponentRaw), exponentRaw)}`;
-  }
-
-  const fn = s.match(/^([a-zA-Z]+)\((.*)\)$/);
-  if (fn) return `${fn[1].toLowerCase()}(${linearAtom(fn[2])})`;
-
-  return s.replace(/\*\*/g, "^");
-}
-
-function linearExpr(raw) {
-  const cleaned = normalize(String(raw || "").replace(/^f\s*\(\s*x\s*\)\s*=/i, "")).replace(/\s+/g, "");
-  return linearAtom(cleaned);
+  const nAdjusted = Number.isFinite(rawN) && rawN !== manualN;
+  return { expr, a, b, n, manualN, method, nAdjusted };
 }
 
 function renderMath(el, tex, display = true) {
@@ -808,7 +373,7 @@ function renderSteps(id, steps) {
 }
 
 function animateSteps(selector) {
-  if (typeof gsap === "undefined") return;
+  if (typeof gsap === "undefined" || REDUCED_MOTION) return;
   const cards = document.querySelectorAll(`${selector} .scard`);
   if (!cards.length) return;
   gsap.fromTo(cards, { opacity: 0, x: -12 }, { opacity: 1, x: 0, duration: 0.24, stagger: 0.04, ease: "power2.out" });
@@ -831,7 +396,7 @@ function gameSolutionText() {
     `Ejercicio: ${item.linear}.`,
     `Respuesta correcta: ${item.answer}.`,
     `Resultado: ${item.result}.`,
-    item.fraction ? `Forma en fraccion: ${item.fraction}.` : "",
+    item.fraction ? `Forma en fracción: ${item.fraction}.` : "",
     `Motivo: ${item.why}`
   ].filter(Boolean).join("\n");
 }
@@ -888,7 +453,7 @@ function answerGame(option) {
     button.disabled = true;
   });
 
-  const fractionText = item.fraction ? ` Forma en fraccion: ${item.fraction}.` : "";
+  const fractionText = item.fraction ? ` Forma en fracción: ${item.fraction}.` : "";
   $("gameScore").textContent = `${GAME_STATE.score}/${GAME_STATE.answered}`;
   $("gameFeedbackText").textContent = `${correct ? "Correcto." : "No. Era: " + item.answer + "."} Resultado: ${item.result}.${fractionText} ${item.why}`;
 }
@@ -908,7 +473,9 @@ function resetGame() {
   renderGame();
 }
 
-function curveSamples(fn, left, right) {
+// Muestrea la curva cortando el trazo en los polos y calcula un rango vertical
+// robusto para que una asíntota no aplaste el resto de la gráfica.
+function curveSamples(fn, left, right, singularities = []) {
   const x = [];
   const y = [];
   for (let i = 0; i <= 720; i++) {
@@ -917,7 +484,23 @@ function curveSamples(fn, left, right) {
     x.push(xv);
     y.push(Number.isFinite(yv) ? yv : null);
   }
-  return { x, y };
+
+  const finite = y.filter(v => v !== null).sort((p, q) => p - q);
+  if (!finite.length) return { x, y, range: null };
+  const pick = q => finite[Math.min(finite.length - 1, Math.floor(q * (finite.length - 1)))];
+  const lo = Math.min(0, pick(0.03));
+  const hi = Math.max(0, pick(0.97));
+  const span = Math.max(hi - lo, 1e-9);
+
+  for (let i = 1; i < y.length; i++) {
+    if (y[i] === null || y[i - 1] === null) continue;
+    const crossesPole = singularities.some(s => s > x[i - 1] && s <= x[i]);
+    const jumps = Math.sign(y[i]) !== Math.sign(y[i - 1]) && Math.abs(y[i] - y[i - 1]) > 4 * span;
+    if (crossesPole || jumps) y[i] = null;
+  }
+
+  const outliers = finite[0] < lo - 3 * span || finite[finite.length - 1] > hi + 3 * span;
+  return { x, y, range: outliers ? [lo - 0.35 * span, hi + 0.35 * span] : null };
 }
 
 function drawGraph(input) {
@@ -930,7 +513,7 @@ function drawGraph(input) {
   const pad = Math.max((right - left) * 0.18, 0.75);
   const viewLeft = left - pad;
   const viewRight = right + pad;
-  const curve = curveSamples(STATE.fn, viewLeft, viewRight);
+  const curve = curveSamples(STATE.fn, viewLeft, viewRight, STATE.integral?.singularities || []);
   const traces = [];
 
   if ($("rectsInput").checked && !$("infinityInput").checked) {
@@ -964,7 +547,8 @@ function drawGraph(input) {
     const ny = [];
     for (let i = 0; i <= 360; i++) {
       const xv = left + (right - left) * i / 360;
-      const yv = finiteOrZero(STATE.fn, xv);
+      const raw = STATE.fn(xv);
+      const yv = Number.isFinite(raw) ? raw : 0;
       px.push(xv);
       py.push(yv >= 0 ? yv : 0);
       nx.push(xv);
@@ -1020,6 +604,7 @@ function drawGraph(input) {
       tickfont: { family: "JetBrains Mono, monospace", size: 11, color: "#64748b" }
     },
     yaxis: {
+      ...(curve.range ? { range: curve.range } : {}),
       showline: true,
       linecolor: "#aeb7c5",
       mirror: false,
@@ -1052,15 +637,32 @@ function drawGraph(input) {
   Plotly.react("plotlyGraph", traces, layout, config);
 }
 
+function integralHasValue() {
+  return Number.isFinite(STATE.exact);
+}
+
+// Texto corto para la integral según su diagnóstico (diverge, no definida...).
+function integralLabel(value = STATE.exact, status = STATE.integral?.status) {
+  if (status === "divergent") return "Diverge";
+  if (status === "undefined") return "No definida";
+  return fmt(value);
+}
+
+function integralTex(value = STATE.exact, status = STATE.integral?.status) {
+  if (status === "divergent") return "\text{diverge}";
+  if (status === "undefined") return "\text{no definida}";
+  return fmt(value);
+}
+
 function updateMetrics(input) {
   const infinite = $("infinityInput").checked;
   const error = Math.abs(STATE.data.sum - STATE.exact);
   $("metricN").textContent = infinite ? "∞" : String(input.manualN);
   $("metricDx").textContent = infinite ? "0" : fmt(STATE.data.dx);
-  $("metricSum").textContent = fmt(infinite ? STATE.exact : STATE.data.sum);
-  $("metricIntegral").textContent = fmt(STATE.exact);
-  $("metricError").textContent = fmt(infinite ? 0 : error);
-  $("metricTotal").textContent = fmt(STATE.areas.total);
+  $("metricSum").textContent = infinite ? integralLabel() : fmt(STATE.data.sum);
+  $("metricIntegral").textContent = integralLabel();
+  $("metricError").textContent = !integralHasValue() ? "—" : fmt(infinite ? 0 : error);
+  $("metricTotal").textContent = Number.isFinite(STATE.areas.total) ? fmt(STATE.areas.total) : "—";
 }
 
 function compactTableRows(rects) {
@@ -1123,6 +725,9 @@ function updateSteps(input) {
   const suffix = STATE.data.rects.length > 3 ? ",\\ldots" : "";
   const infinite = $("infinityInput").checked;
   const error = Math.abs(STATE.data.sum - STATE.exact);
+  const integralNote = STATE.integral?.status && STATE.integral.status !== "ok"
+    ? integralStatusMessage(STATE.integral)
+    : "Valor de referencia por cuadratura adaptativa de Gauss–Kronrod.";
 
   renderSteps("stepsTimeline", [
     { n: 1, label: "Planteamiento", tex: `\\int_{${fmt(input.a)}}^{${fmt(input.b)}}\\!\\left(${exprToLatex(input.expr)}\\right)dx`, desc: `Área neta bajo f(x) en [${fmt(input.a)}, ${fmt(input.b)}].` },
@@ -1130,9 +735,9 @@ function updateSteps(input) {
     { n: 3, label: "Muestras", tex: sampleRule, desc: `Método seleccionado: ${method}.` },
     { n: 4, label: "Evaluación", tex: `${firstValues}${suffix}`, desc: "Primeras evaluaciones de la función." },
     { n: 5, label: "Suma", tex: `S_n=\\sum_{i=1}^{n}f(x_i^*)\\Delta x\\approx ${fmt(STATE.data.sum)}`, desc: "Suma de las áreas rectangulares." },
-    { n: 6, label: "Integral", tex: `\\lim_{n\\to\\infty}S_n=\\int_{${fmt(input.a)}}^{${fmt(input.b)}}f(x)\\,dx=${fmt(STATE.exact)}`, desc: "Aproximación numérica con regla de Simpson." },
-    { n: 7, label: "Error", tex: `|S_n-I|=${fmt(infinite ? 0 : error)}`, desc: "Diferencia absoluta entre la suma y la integral." },
-    { n: 8, label: "Áreas", tex: `A^+=${fmt(STATE.areas.pos)},\\;A^-=${fmt(STATE.areas.neg)},\\;A_{total}=${fmt(STATE.areas.total)}`, desc: "Desglose entre área positiva, negativa y total." }
+    { n: 6, label: "Integral", tex: `\\lim_{n\\to\\infty}S_n=\\int_{${fmt(input.a)}}^{${fmt(input.b)}}f(x)\\,dx=${integralTex()}`, desc: integralNote },
+    { n: 7, label: "Error", tex: integralHasValue() ? `|S_n-I|=${fmt(infinite ? 0 : error)}` : "|S_n-I|\\ \\text{no aplica}", desc: integralHasValue() ? "Diferencia absoluta entre la suma y la integral." : "Sin integral finita no hay error que medir: S_n no converge a un número." },
+    { n: 8, label: "Áreas", tex: Number.isFinite(STATE.areas.total) ? `A^+=${fmt(STATE.areas.pos)},\\;A^-=${fmt(STATE.areas.neg)},\\;A_{total}=${fmt(STATE.areas.total)}` : "A_{total}\\ \\text{no es finita}", desc: "Desglose entre área positiva, negativa y total." }
   ]);
 }
 
@@ -1161,16 +766,48 @@ function setStatus(message, type = "") {
   bar.className = type ? `status-pill ${type}` : "status-pill";
 }
 
+function computeRiemann(input) {
+  const fn = compile(input.expr);
+  const data = riemann(fn, input.a, input.b, input.n, input.method);
+  const analysis = analyzeIntegral(fn, input.a, input.b);
+  return { input, fn, data, integral: analysis.net, exact: analysis.net.value, areas: analysis.areas };
+}
+
+function riemannWarning(input) {
+  const notes = [];
+  if (STATE.integral && STATE.integral.status !== "ok") notes.push(integralStatusMessage(STATE.integral));
+  if (STATE.data.invalid) notes.push(`f(x) no está definida en ${STATE.data.invalid} punto(s) de muestra; esos rectángulos se tomaron con altura 0.`);
+  if (input.nAdjusted) notes.push(`n se ajustó a ${input.manualN} (rango permitido: 1 a ${MAX_N}).`);
+  return notes.join(" ");
+}
+
+// Agrupa los eventos de entrada en un único recálculo por cuadro de animación,
+// para que arrastrar el control de n siga el puntero sin acumular trabajo.
+let updateFrame = 0;
+function scheduleUpdate() {
+  if (updateFrame) return;
+  const run = () => {
+    updateFrame = 0;
+    updateAll();
+  };
+  updateFrame = typeof requestAnimationFrame === "function" ? requestAnimationFrame(run) : setTimeout(run, 0);
+}
+
 function updateAll() {
   try {
     const input = readInputs();
-    STATE.input = input;
-    STATE.fn = compile(input.expr);
-    STATE.data = riemann(STATE.fn, input.a, input.b, input.n, input.method);
-    STATE.exact = simpson(STATE.fn, input.a, input.b);
-    STATE.areas = signedAreas(STATE.fn, input.a, input.b);
+    markField("exprInput");
+    let result;
+    try {
+      result = computeRiemann(input);
+    } catch (error) {
+      markField("exprInput", error.message);
+      throw error;
+    }
+    Object.assign(STATE, result);
+    document.querySelector(".workspace")?.classList.remove("is-stale");
 
-    $("nInput").value = input.manualN;
+    if (document.activeElement !== $("nInput")) $("nInput").value = input.manualN;
     $("nRange").value = input.manualN;
     syncMethodButtons(input.method);
     updateMetrics(input);
@@ -1181,554 +818,109 @@ function updateAll() {
     updateSteps(input);
     if ($("pAssistant")?.classList.contains("show")) updateAssistant("summary");
 
+    const warning = riemannWarning(input);
     const status = $("infinityInput").checked
       ? "Modo límite n→∞: se muestra el área continua"
       : `OK · ${input.manualN} rectángulos · ${methodLabel(input.method)}`;
-    setStatus(status);
+    setStatus(warning || status, warning ? "warn" : "");
   } catch (error) {
+    // Los resultados visibles corresponden a la última entrada válida: se atenúan.
+    document.querySelector(".workspace")?.classList.add("is-stale");
     setStatus(error.message, "err");
   }
 }
 
-function tokenizeTerms(expr) {
-  let text = normalize(expr).replace(/\s+/g, "");
-  if (!text) return [];
-  if (!/^[+-]/.test(text)) text = `+${text}`;
+function boundTex(value) {
+  if (value === Infinity) return "\\infty";
+  if (value === -Infinity) return "-\\infty";
+  return fmt(value);
+}
 
-  const out = [];
-  let depth = 0;
-  let start = 0;
-  for (let i = 1; i < text.length; i++) {
-    if (text[i] === "(") depth++;
-    if (text[i] === ")") depth--;
-    if ((text[i] === "+" || text[i] === "-") && depth === 0) {
-      out.push(text.slice(start, i));
-      start = i;
-    }
+function definiteResultTex(solution) {
+  const d = solution.definite;
+  const integral = `\\int_{${boundTex(d.a)}}^{${boundTex(d.b)}}\\!\\left(${exprToLatex(solution.expr)}\\right)dx`;
+  if (d.status === "divergent") return `${integral}\;\\text{diverge}`;
+  if (d.status === "undefined") return `${integral}\;\\text{no existe en }\\mathbb{R}`;
+  if (d.method === "symbolic") {
+    const exact = `\\left[${exprToLatex(solution.anti)}\\right]_{${boundTex(d.a)}}^{${boundTex(d.b)}}`;
+    const rounded = Math.round(d.value);
+    const exactValue = fractionValueText(d.value) ? valueTex(d.value) : Math.abs(d.value - rounded) < 1e-10 ? String(rounded) : "";
+    return `${integral}=${exact}${exactValue ? `=${exactValue}` : ""}\\approx ${fmt(d.value, 8)}`;
   }
-  out.push(text.slice(start));
-  return out.filter(Boolean);
+  return `${integral}\\approx ${fmt(d.value, 8)}`;
 }
 
-function evaluateNumber(text) {
-  if (!/^[-0-9./]+$/.test(text)) throw new Error("Número inválido");
-  return Function(`"use strict"; return (${text})`)();
-}
-
-function productWithCoefficient(coef, body) {
-  const numeric = Number(coef);
-  if (Math.abs(numeric - 1) < 1e-12) return body;
-  if (Math.abs(numeric + 1) < 1e-12) return `-${body}`;
-  return `${numberExpr(numeric)}*${body}`;
-}
-
-function integratePower(coefText, exponentText) {
-  const coef = Number(evaluateNumber(coefText));
-  const exponent = Number(evaluateNumber(exponentText));
-  if (Math.abs(exponent + 1) < 1e-12) return productWithCoefficient(coef, "log(abs(x))");
-  return productWithCoefficient(coef / (exponent + 1), `x**${numberExpr(exponent + 1)}`);
-}
-
-// Normaliza exponentes con paréntesis: x**(-1) → exponent "-1"
-function parseExponent(raw) {
-  const s = String(raw || "").trim();
-  // acepta formas: -1, (-1), (−1), -1/2, (-1/2)
-  const cleaned = s.replace(/^\((.+)\)$/, "$1");
-  if (/^-?[0-9]+(?:\.[0-9]+)?(?:\/[0-9]+(?:\.[0-9]+)?)?$/.test(cleaned)) return cleaned;
-  return null;
-}
-
-function integrateTerm(term) {
-  let match;
-
-  // ── Constante numérica ────────────────────────────────────────────────────
-  if (/^\d+(\.\d+)?$/.test(term)) return `${term}*x`;
-
-  // ── Monomios básicos de x ─────────────────────────────────────────────────
-  if (term === "x") return "1/2*x**2";
-
-  // ── Regla logarítmica: ∫1/x dx = ln|x| + C ───────────────────────────────
-  if (term === "1/x") return "log(abs(x))";
-  // x^(-1) con o sin paréntesis en el exponente
-  if ((match = term.match(/^x\*\*\((-1)\)$/)) || term === "x**-1") return "log(abs(x))";
-
-  // ── Integral de ln(x): ∫ln(x)dx = x·ln|x| − x + C  (por partes) ─────────
-  if (term === "log(x)" || term === "ln(x)") return "x*log(abs(x)) - x";
-  // ln(a·x) = ln(a) + ln(x) → misma antiderivada menos constante: x·ln|ax| − x
-  if ((match = term.match(/^(?:log|ln)\(([0-9.\/]+)\*x\)$/))) {
-    const a = match[1];
-    return `x*log(abs(${a}*x)) - x`;
-  }
-  // ln(x + a) o ln(x − a) → (x+a)·ln|x+a| − (x+a)  (por partes con u=ln(x+a))
-  if ((match = term.match(/^(?:log|ln)\(x([+-][0-9.\/]+)\)$/))) {
-    const a = match[1];
-    const inner = `x${a}`;
-    return `(${inner})*log(abs(${inner})) - (${inner})`;
-  }
-
-  // ── Fracciones 1/(x+a): ∫1/(x+a)dx = ln|x+a| + C ────────────────────────
-  if ((match = term.match(/^1\/\(x([+-][0-9.\/]+)\)$/))) return `log(abs(x${match[1]}))`;
-  if ((match = term.match(/^1\/\(([0-9.\/]+)\*x([+-][0-9.\/]+)\)$/))) {
-    const a = match[1], b = match[2];
-    return `${numberExpr(1 / Number(evaluateNumber(a)))}*log(abs(${a}*x${b}))`;
-  }
-
-  // ── Arcotangente: ∫1/(1+x²)dx = arctan(x) + C ───────────────────────────
-  if (term === "1/(1+x**2)" || term === "1/(x**2+1)") return "atan(x)";
-  // ∫1/(a²+x²)dx = (1/a)·arctan(x/a)
-  if ((match = term.match(/^1\/\(([0-9.\/]+)\+x\*\*2\)$/) ) || (match = term.match(/^1\/\(x\*\*2\+([0-9.\/]+)\)$/))) {
-    const a2 = Number(evaluateNumber(match[1]));
-    if (a2 > 0) {
-      const a = Math.sqrt(a2);
-      return `${numberExpr(1/a)}*atan(x/${numberExpr(a)})`;
-    }
-  }
-
-  // ── Regla de potencia: ∫xⁿ dx = x^(n+1)/(n+1) + C  (n≠−1) ──────────────
-  if ((match = term.match(/^([0-9.\/]+)\*?x$/))) return productWithCoefficient(Number(evaluateNumber(match[1])) / 2, "x**2");
-  // x**n sin paréntesis: e.g. x**2, x**0.5, x**-2
-  if ((match = term.match(/^x\*\*([-0-9/.]+)$/))) return integratePower("1", match[1]);
-  // x**(n) con paréntesis: x**(-2), x**(-1/2)
-  if ((match = term.match(/^x\*\*\((.+)\)$/))) {
-    const exp = parseExponent(`(${match[1]})`);
-    if (exp !== null) return integratePower("1", exp);
-  }
-  if ((match = term.match(/^([0-9.\/]+)\*x\*\*([-0-9/.]+)$/))) return integratePower(match[1], match[2]);
-  if ((match = term.match(/^([0-9.\/]+)\*x\*\*\((.+)\)$/))) {
-    const exp = parseExponent(`(${match[2]})`);
-    if (exp !== null) return integratePower(match[1], exp);
-  }
-
-  // ── Cocientes k/x, k/xⁿ ──────────────────────────────────────────────────
-  if ((match = term.match(/^([0-9.\/]+)\/x$/))) return `${match[1]}*log(abs(x))`;
-  if ((match = term.match(/^([0-9.\/]+)\/x\*\*([-0-9/.]+)$/))) return integratePower(match[1], `-${match[2]}`);
-  if ((match = term.match(/^([0-9.\/]+)\/\(x([+-][0-9.\/]+)\)$/))) return `${match[1]}*log(abs(x${match[2]}))`;
-
-  // ── c·ln(x) y c·log(x) ───────────────────────────────────────────────────
-  if ((match = term.match(/^([0-9.\/]+)\*log\(x\)$/))) return `${match[1]}*(x*log(abs(x)) - x)`;
-  if ((match = term.match(/^([0-9.\/]+)\*ln\(x\)$/))) return `${match[1]}*(x*log(abs(x)) - x)`;
-
-  // ── Trigonométricas: sen/cos básicos y con coeficiente ────────────────────
-  if (term === "sin(x)") return "-cos(x)";
-  if (term === "cos(x)") return "sin(x)";
-  if (term === "tan(x)") return "-log(abs(cos(x)))";
-  if (term === "sec(x)**2") return "tan(x)";
-  if (term === "csc(x)**2") return "-cot(x)";
-  if (term === "sec(x)*tan(x)") return "sec(x)";
-  if (term === "csc(x)*cot(x)") return "-csc(x)";
-  // ∫sin(ax)dx = −cos(ax)/a,  ∫cos(ax)dx = sin(ax)/a
-  if ((match = term.match(/^sin\(([0-9.\/]+)\*x\)$/))) {
-    const a = Number(evaluateNumber(match[1]));
-    return `${numberExpr(-1/a)}*cos(${match[1]}*x)`;
-  }
-  if ((match = term.match(/^cos\(([0-9.\/]+)\*x\)$/))) {
-    const a = Number(evaluateNumber(match[1]));
-    return `${numberExpr(1/a)}*sin(${match[1]}*x)`;
-  }
-  if ((match = term.match(/^(\d+\.?\d*)\*sin\(x\)$/))) return `-${match[1]}*cos(x)`;
-  if ((match = term.match(/^(\d+\.?\d*)\*cos\(x\)$/))) return `${match[1]}*sin(x)`;
-
-  // ── Exponencial: ∫eˣ dx = eˣ,  ∫e^(ax) dx = e^(ax)/a ────────────────────
-  if (term === "exp(x)") return "exp(x)";
-  if ((match = term.match(/^exp\(([0-9.\/]+)\*x\)$/))) {
-    const a = Number(evaluateNumber(match[1]));
-    return `${numberExpr(1/a)}*exp(${match[1]}*x)`;
-  }
-  if ((match = term.match(/^(\d+\.?\d*)\*exp\(x\)$/))) return `${match[1]}*exp(x)`;
-  if ((match = term.match(/^(\d+\.?\d*)\*exp\(([0-9.\/]+)\*x\)$/))) {
-    const c = Number(match[1]);
-    const a = Number(evaluateNumber(match[2]));
-    return `${numberExpr(c/a)}*exp(${match[2]}*x)`;
-  }
-
-  // ── √x y variantes ───────────────────────────────────────────────────────
-  if (term === "sqrt(x)") return "2/3*x**(3/2)";
-  if ((match = term.match(/^([0-9.\/]+)\*sqrt\(x\)$/))) {
-    const c = Number(evaluateNumber(match[1]));
-    return `${numberExpr(2*c/3)}*x**(3/2)`;
-  }
-
-  throw new Error(`No hay regla para: ${term}`);
-}
-
-function integrateSimple(expr) {
-  const terms = tokenizeTerms(expr);
-  if (!terms.length) throw new Error("Expresión vacía");
-
-  const parts = terms.map(term => {
-    const sign = term[0] === "-" ? -1 : 1;
-    const body = term.slice(1);
-    return { sign, value: integrateTerm(body) };
-  });
-
-  return parts.map((part, index) => {
-    const intrinsicNegative = part.value.startsWith("-");
-    const clean = intrinsicNegative ? part.value.slice(1) : part.value;
-    const sign = part.sign * (intrinsicNegative ? -1 : 1);
-    if (index === 0) return sign < 0 ? `-${clean}` : clean;
-    return `${sign < 0 ? "- " : "+ "}${clean}`;
-  }).join(" ");
-}
-
-function evaluateBound(text) {
-  const normalized = normalize(text)
-    .replace(/\bpi\b/g, String(Math.PI))
-    .replace(/\bPI\b/g, String(Math.PI))
-    .replace(/\be\b/g, String(Math.E));
-  if (!/^[-+0-9.*/()\s]+$/.test(normalized)) throw new Error("Límite inválido");
-  return Function(`"use strict"; return (${normalized})`)();
-}
-
-function nearZero(value) {
-  return Math.abs(Number(value)) < 1e-9;
-}
-
-function polynomialDegree(coeffs) {
-  for (let i = coeffs.length - 1; i >= 0; i--) {
-    if (!nearZero(coeffs[i])) return i;
-  }
-  return 0;
-}
-
-function multiplyPolynomial2(a, b) {
-  const out = [0, 0, 0];
-  for (let i = 0; i < a.length; i++) {
-    for (let j = 0; j < b.length; j++) {
-      if (i + j > 2 && !nearZero(a[i] * b[j])) return null;
-      if (i + j <= 2) out[i + j] += a[i] * b[j];
-    }
-  }
-  return out;
-}
-
-function parsePolynomial2(expr) {
-  let s = stripOuterParens(normalize(expr).replace(/\s+/g, ""));
-  if (!s) return null;
-
-  const squared = s.match(/^\((.+)\)\*\*2$/);
-  if (squared) {
-    const base = parsePolynomial2(squared[1]);
-    return base && polynomialDegree(base) === 1 ? multiplyPolynomial2(base, base) : null;
-  }
-
-  const product = s.match(/^\((.+)\)\*\((.+)\)$/);
-  if (product) {
-    const left = parsePolynomial2(product[1]);
-    const right = parsePolynomial2(product[2]);
-    return left && right ? multiplyPolynomial2(left, right) : null;
-  }
-
-  const coeffs = [0, 0, 0];
-  const terms = tokenizeTerms(s);
-  for (const term of terms) {
-    const sign = term[0] === "-" ? -1 : 1;
-    const body = term.slice(1);
-    let match;
-
-    if (/^[0-9.\/]+$/.test(body)) {
-      coeffs[0] += sign * Number(evaluateNumber(body));
-      continue;
-    }
-    if (body === "x") {
-      coeffs[1] += sign;
-      continue;
-    }
-    if (body === "x**2") {
-      coeffs[2] += sign;
-      continue;
-    }
-    if ((match = body.match(/^x\*\*([0-2])$/))) {
-      coeffs[Number(match[1])] += sign;
-      continue;
-    }
-    if ((match = body.match(/^([0-9.\/]+)\*?x(?:\*\*([0-2]))?$/))) {
-      coeffs[Number(match[2] || 1)] += sign * Number(evaluateNumber(match[1]));
-      continue;
-    }
-    return null;
-  }
-  return coeffs;
-}
-
-function polynomialValue(coeffs, x) {
-  return coeffs.reduce((sum, coeff, degree) => sum + coeff * x ** degree, 0);
-}
-
-function polynomialDerivativeValue(coeffs, x) {
-  return (coeffs[1] || 0) + 2 * (coeffs[2] || 0) * x;
-}
-
-function appendPolynomialTerm(parts, coeff, body = "") {
-  if (nearZero(coeff)) return;
-  const sign = coeff < 0 ? "-" : "+";
-  const abs = Math.abs(coeff);
-  const text = body
-    ? `${Math.abs(abs - 1) < 1e-9 ? "" : `${positiveNumberExpr(abs)}*`}${body}`
-    : positiveNumberExpr(abs);
-  if (!parts.length) parts.push(coeff < 0 ? `-${text}` : text);
-  else parts.push(`${sign} ${text}`);
-}
-
-function polynomialToExpr(coeffs) {
-  const parts = [];
-  appendPolynomialTerm(parts, coeffs[2] || 0, "x**2");
-  appendPolynomialTerm(parts, coeffs[1] || 0, "x");
-  appendPolynomialTerm(parts, coeffs[0] || 0);
-  return parts.length ? parts.join(" ") : "0";
-}
-
-function compactExpression(text) {
-  return String(text || "").replace(/\s+/g, "");
-}
-
-function linearFactorFromRoot(root) {
-  if (nearZero(root)) return "x";
-  return root < 0 ? `x+${positiveNumberExpr(root)}` : `x-${positiveNumberExpr(root)}`;
-}
-
-function fractionTerm(coef, denominator) {
-  return `${positiveNumberExpr(coef)}/(${denominator})`;
-}
-
-function bodyWithCoefficient(coef, body) {
-  const abs = Math.abs(coef);
-  return Math.abs(abs - 1) < 1e-9 ? body : `${positiveNumberExpr(abs)}*${body}`;
-}
-
-function appendSignedText(parts, signedValue, positiveText) {
-  if (nearZero(signedValue)) return;
-  if (!parts.length) parts.push(signedValue < 0 ? `-${positiveText}` : positiveText);
-  else parts.push(`${signedValue < 0 ? "-" : "+"} ${positiveText}`);
-}
-
-function appendSignedBody(parts, signedValue, body) {
-  appendSignedText(parts, signedValue, bodyWithCoefficient(signedValue, body));
-}
-
-function decomposePartialGeneric(clean) {
-  const divisionIndex = findTopLevelOperator(clean, "/");
-  if (divisionIndex <= 0) return null;
-
-  const numeratorRaw = clean.slice(0, divisionIndex);
-  const denominatorRaw = clean.slice(divisionIndex + 1);
-  const numerator = parsePolynomial2(numeratorRaw);
-  const denominator = parsePolynomial2(denominatorRaw);
-  if (!numerator || !denominator || polynomialDegree(denominator) !== 2) return null;
-
-  const a = denominator[2];
-  const b = denominator[1];
-  const c = denominator[0];
-  if (nearZero(a)) return null;
-
-  const numeratorDegree = polynomialDegree(numerator);
-  if (numeratorDegree > 2) return null;
-  const quotient = numeratorDegree === 2 ? numerator[2] / a : 0;
-  const remainder = numerator.map((coeff, index) => coeff - quotient * (denominator[index] || 0));
-  const denominatorText = compactExpression(polynomialToExpr(denominator));
-  const decParts = [];
-  const intParts = [];
-  const steps = [
-    { label: "Planteamiento", tex: `\\frac{${exprToLatex(numeratorRaw)}}{${exprToLatex(denominatorRaw)}}`, desc: "Leemos numerador y denominador." }
-  ];
-
-  appendSignedText(decParts, quotient, positiveNumberExpr(quotient));
-  appendSignedBody(intParts, quotient, "x");
-
-  const discriminant = b * b - 4 * a * c;
-
-  if (discriminant > 1e-9) {
-    const sqrtD = Math.sqrt(discriminant);
-    const r1 = (-b + sqrtD) / (2 * a);
-    const r2 = (-b - sqrtD) / (2 * a);
-    const f1 = linearFactorFromRoot(r1);
-    const f2 = linearFactorFromRoot(r2);
-    const A = polynomialValue(remainder, r1) / (a * (r1 - r2));
-    const B = polynomialValue(remainder, r2) / (a * (r2 - r1));
-
-    appendSignedText(decParts, A, fractionTerm(A, f1));
-    appendSignedText(decParts, B, fractionTerm(B, f2));
-    appendSignedBody(intParts, A, `log(abs(${f1}))`);
-    appendSignedBody(intParts, B, `log(abs(${f2}))`);
-
-    steps.push(
-      { label: "Factorizar", tex: `${exprToLatex(denominatorText)}=${exprToLatex(`(${f1})*(${f2})`)}`, desc: "El denominador tiene dos factores lineales reales." },
-      { label: "Fracciones parciales", tex: `${exprToLatex(clean)}=${exprToLatex(decParts.join(" "))}`, desc: "Calculamos constantes por sustitucion en las raices." },
-      { label: "Regla", tex: "\\int\\frac{k}{x-r}\\,dx=k\\ln|x-r|", desc: "Cada factor lineal produce un logaritmo." }
-    );
-    return { dec: decParts.join(" "), intg: intParts.join(" ") || "0", steps };
-  }
-
-  if (Math.abs(discriminant) <= 1e-9) {
-    const root = -b / (2 * a);
-    const factor = linearFactorFromRoot(root);
-    const A = polynomialDerivativeValue(remainder, root) / a;
-    const B = polynomialValue(remainder, root) / a;
-
-    appendSignedText(decParts, A, fractionTerm(A, factor));
-    appendSignedText(decParts, B, fractionTerm(B, `(${factor})**2`));
-    appendSignedBody(intParts, A, `log(abs(${factor}))`);
-    appendSignedText(intParts, -B, fractionTerm(-B, factor));
-
-    steps.push(
-      { label: "Factor repetido", tex: `${exprToLatex(denominatorText)}=${exprToLatex(`(${factor})**2`)}`, desc: "El denominador tiene una raiz doble." },
-      { label: "Fracciones parciales", tex: `${exprToLatex(clean)}=${exprToLatex(decParts.join(" "))}`, desc: "Usamos A/(x-r)+B/(x-r)^2." },
-      { label: "Regla", tex: "\\int\\frac{k}{(x-r)^2}\\,dx=-\\frac{k}{x-r}", desc: "El segundo termino se integra como potencia -2." }
-    );
-    return { dec: decParts.join(" "), intg: intParts.join(" ") || "0", steps };
-  }
-
-  const positiveDelta = 4 * a * c - b * b;
-  if (positiveDelta <= 1e-9 || a <= 0) return null;
-  const alpha = (remainder[1] || 0) / (2 * a);
-  const beta = (remainder[0] || 0) - alpha * b;
-  const derivativeText = compactExpression(polynomialToExpr([b, 2 * a, 0]));
-  const sqrtDelta = Math.sqrt(positiveDelta);
-  const atanArgument = `(${derivativeText})/${numberExpr(sqrtDelta)}`;
-  const atanCoef = 2 * beta / sqrtDelta;
-
-  appendSignedBody(decParts, alpha, `(${derivativeText})/(${denominatorText})`);
-  appendSignedText(decParts, beta, fractionTerm(beta, denominatorText));
-  appendSignedBody(intParts, alpha, `log(abs(${denominatorText}))`);
-  appendSignedBody(intParts, atanCoef, `atan(${atanArgument})`);
-
-  steps.push(
-    { label: "Cuadratica irreducible", tex: `${exprToLatex(denominatorText)}`, desc: "No hay raices reales, asi que aparece logaritmo y arcotangente." },
-    { label: "Separar", tex: `${exprToLatex(clean)}=${exprToLatex(decParts.join(" "))}`, desc: "Separamos una parte tipo D'(x)/D(x) y una constante sobre D(x)." },
-    { label: "Reglas", tex: "\\int\\frac{D'}{D}dx=\\ln|D|,\\quad \\int\\frac{dx}{x^2+a^2}=\\frac{1}{a}\\arctan\\frac{x}{a}", desc: "Combinamos logaritmo y arcotangente." }
-  );
-  return { dec: decParts.join(" "), intg: intParts.join(" ") || "0", steps };
-}
-
-function decomposePartial(expr) {
-  const clean = normalize(expr).replace(/\s+/g, "");
-  const patterns = [
-    {
-      re: /^\(x\+5\)\/\(x\*\*2\+3\*x\+2\)$/,
-      dec: "4/(x+1) - 3/(x+2)",
-      intg: "4*log(abs(x+1)) - 3*log(abs(x+2))",
-      steps: [
-        { label: "Factorizar", tex: "Q(x)=x^{2}+3x+2=(x+1)(x+2)", desc: "Factores lineales." },
-        { label: "Planteamiento", tex: "\\frac{x+5}{(x+1)(x+2)}=\\frac{A}{x+1}+\\frac{B}{x+2}", desc: "Constantes A y B." },
-        { label: "Ecuación", tex: "x+5=A(x+2)+B(x+1)", desc: "Multiplicamos por el denominador." },
-        { label: "Resolver", tex: "x=-1\\Rightarrow A=4,\\;x=-2\\Rightarrow B=-3", desc: "Sustituimos las raíces del denominador." }
-      ]
-    },
-    {
-      re: /^\(x\*\*2-5\*x\+9\)\/\(x\*\*2-5\*x\+6\)$/,
-      dec: "1 - 3/(x-2) + 3/(x-3)",
-      intg: "x - 3*log(abs(x-2)) + 3*log(abs(x-3))",
-      steps: [
-        { label: "División", tex: "\\frac{x^{2}-5x+9}{x^{2}-5x+6}=1+\\frac{3}{x^{2}-5x+6}", desc: "Fracción impropia." },
-        { label: "Factorizar", tex: "x^{2}-5x+6=(x-2)(x-3)", desc: "Cuadrática factorizable." },
-        { label: "Parciales", tex: "\\frac{3}{(x-2)(x-3)}=\\frac{A}{x-2}+\\frac{B}{x-3}", desc: "Planteamiento." },
-        { label: "Coeficientes", tex: "A=-3,\\;B=3", desc: "Usamos x=2 y x=3." }
-      ]
-    },
-    {
-      re: /^\(3\*x\+5\)\/\(x-1\)\*\*2$/,
-      dec: "3/(x-1) + 8/(x-1)**2",
-      intg: "3*log(abs(x-1)) - 8/(x-1)",
-      steps: [
-        { label: "Factor repetido", tex: "Q(x)=(x-1)^{2}", desc: "Multiplicidad 2." },
-        { label: "Planteamiento", tex: "\\frac{3x+5}{(x-1)^{2}}=\\frac{A}{x-1}+\\frac{B}{(x-1)^{2}}", desc: "Potencias crecientes." },
-        { label: "Ecuación", tex: "3x+5=A(x-1)+B", desc: "Multiplicamos por el denominador." },
-        { label: "Resolver", tex: "A=3,\\;B=8", desc: "x=1 para B y coeficientes para A." }
-      ]
-    },
-    {
-      re: /^\(2\*x\+3\)\/\(x\*\*2\+4\)$/,
-      dec: "2*x/(x**2+4) + 3/(x**2+4)",
-      intg: "log(x**2+4) + (3/2)*atan(x/2)",
-      steps: [
-        { label: "Irreducible", tex: "Q(x)=x^{2}+4", desc: "No factoriza en reales." },
-        { label: "Separar", tex: "\\frac{2x+3}{x^{2}+4}=\\frac{2x}{x^{2}+4}+\\frac{3}{x^{2}+4}", desc: "Derivada del denominador más constante." },
-        { label: "Logaritmo", tex: "\\int\\frac{2x}{x^{2}+4}dx=\\ln(x^{2}+4)", desc: "Tipo u'/u." },
-        { label: "Arcotangente", tex: "\\int\\frac{3}{x^{2}+4}dx=\\tfrac{3}{2}\\arctan\\left(\\tfrac{x}{2}\\right)", desc: "Regla de arcotangente." }
-      ]
-    }
-  ];
-  return patterns.find(pattern => pattern.re.test(clean)) || decomposePartialGeneric(clean);
-}
-
-function integrationRuleName(expr, partial) {
-  const clean = normalize(expr).replace(/\s+/g, "");
-  if (partial) return "Fracciones parciales + integral logarítmica";
-  // Logaritmo natural como integrando: ∫ln(x)dx
-  if (/^(?:log|ln)\((?:[0-9.\/]+\*)?x(?:[+-][0-9.\/]+)?\)$/.test(clean) || /\*(?:log|ln)\(x\)/.test(clean))
-    return "Integración por partes: ∫ln(x)dx = x·ln|x| − x + C";
-  // Arcotangente
-  if (/1\/\((?:1\+x\*\*2|x\*\*2\+1|[0-9.\/]+\+x\*\*2|x\*\*2\+[0-9.\/]+)\)/.test(clean))
-    return "Integral de arcotangente: ∫1/(a²+x²)dx = (1/a)·arctan(x/a) + C";
-  // Logarítmica 1/x  (incluyendo x**(-1), x**-1)
-  if (/(?:^|[+\-])1\/x$|(?:^|[+\-])1\/x[+\-]|x\*\*-1|x\*\*\(-1\)|(?:^|[+\-])[0-9.\/]+\/x/.test(clean))
-    return "Integral logarítmica: ∫(1/x)dx = ln|x| + C";
-  // 1/(x+a)
-  if (/1\/\(x[+-]/.test(clean)) return "Integral logarítmica: ∫1/(x+a)dx = ln|x+a| + C";
-  // Trigonométrica
-  if (/sin|cos|tan|sec|csc|cot/.test(clean)) return "Regla trigonométrica directa";
-  // Exponencial
-  if (/exp\(/.test(clean)) return "Regla exponencial: ∫e^(ax)dx = e^(ax)/a + C";
-  // Raíz
-  if (/sqrt\(x\)/.test(clean)) return "Regla de potencia: ∫√x dx = (2/3)x^(3/2) + C";
-  // Potencia general
-  if (/x(?:\*\*)?/.test(clean)) return "Regla de potencia: ∫xⁿ dx = xⁿ⁺¹/(n+1) + C  (n≠−1)";
-  return "Reglas simbólicas locales + verificación numérica";
-}
-
-function formulaForRule(rule) {
-  if (rule.includes("partes") && rule.includes("ln"))
-    return "\\int\\ln(x)\\,dx=x\\ln|x|-x+C \\quad\\text{(integración por partes: }u=\\ln x,\\,dv=dx)";
-  if (rule.includes("arcotangente"))
-    return "\\int\\frac{1}{a^2+x^2}\\,dx=\\frac{1}{a}\\arctan\\!\\left(\\frac{x}{a}\\right)+C";
-  if (rule.includes("1/(x+a)"))
-    return "\\int\\frac{1}{x+a}\\,dx=\\ln|x+a|+C";
-  if (rule.includes("logarítmica"))
-    return "\\int\\frac{1}{x}\\,dx=\\ln|x|+C \\quad\\text{(regla logarítmica fundamental)}";
-  if (rule.includes("trigonométrica"))
-    return "\\int\\sin x\\,dx=-\\cos x+C,\\quad\\int\\cos x\\,dx=\\sin x+C";
-  if (rule.includes("exponencial"))
-    return "\\int e^{ax}\\,dx=\\frac{e^{ax}}{a}+C";
-  if (rule.includes("√x") || rule.includes("sqrt"))
-    return "\\int\\sqrt{x}\\,dx=\\frac{2}{3}x^{3/2}+C";
-  if (rule.includes("Simpson"))
-    return "\\int_a^b f(x)dx\\approx\\frac{h}{3}\\left[f(x_0)+4f(x_1)+2f(x_2)+\\cdots+f(x_n)\\right]";
-  return "\\int x^n\\,dx=\\frac{x^{n+1}}{n+1}+C\\quad(n\\ne -1)";
-}
-
-function evaluateAntiderivative(anti, a, b) {
-  try {
-    const F = compile(anti);
-    return F(b) - F(a);
-  } catch (_) {
-    return NaN;
-  }
-}
-
-function fractionValueText(value) {
-  return fractionApproxText(value, 1000, 1e-10);
-}
-
-function valueTex(value) {
-  const fraction = fractionValueText(value);
-  return fraction ? exprToLatex(fraction) : fmt(value, 8);
-}
-
-function renderSolverSummary(rule, exactTex, decimal, partial) {
+function renderSolverSummary(solution) {
   const summary = $("solverSummary");
   if (!summary) return;
-  const fraction = Number.isFinite(decimal) ? fractionValueText(decimal) : "";
-  const fractionHtml = fraction
-    ? `<div><span>Fraccion</span><b class="summary-math">${mathToString(exprToLatex(fraction), false)}</b></div>`
-    : "";
-  const partialHtml = partial
-    ? `<div><span>Fracción parcial</span><b class="summary-math">${mathToString(exprToLatex(partial.dec), false)}</b></div>`
-    : "";
-  summary.innerHTML = `
-    <div><span>Regla usada</span><b>${rule}</b></div>
-    <div><span>Resultado exacto</span><b class="summary-math">${mathToString(exactTex, false)}</b></div>
-    <div><span>Decimal</span><b>${Number.isFinite(decimal) ? fmt(decimal, 8) : "Sin límites definidos"}</b></div>
-    ${fractionHtml}
-    ${partialHtml}`;
+  const d = solution.definite;
+  const rule = solution.rules.length ? solution.rules.join(" + ") : RULE_NUMERIC_LABEL;
+  const rows = [`<div><span>Regla usada</span><b>${escapeHtml(rule)}</b></div>`];
+  if (solution.anti) {
+    rows.push(`<div><span>Primitiva</span><b class="summary-math">${mathToString(`${exprToLatex(solution.anti)}+C`, false)}</b></div>`);
+  } else {
+    rows.push(`<div><span>Primitiva</span><b>Sin primitiva elemental</b></div>`);
+  }
+  if (d) {
+    const finite = Number.isFinite(d.value);
+    rows.push(`<div><span>Decimal</span><b>${finite ? fmt(d.value, 8) : escapeHtml(integralLabel(d.value, d.status))}</b></div>`);
+    const fraction = finite ? fractionValueText(d.value) : "";
+    const piForm = finite && !fraction ? piMultipleText(d.value) : "";
+    if (fraction || piForm) {
+      rows.push(`<div><span>Forma exacta</span><b class="summary-math">${mathToString(exprToLatex(fraction || piForm), false)}</b></div>`);
+    }
+  } else {
+    rows.push(`<div><span>Decimal</span><b>Sin límites definidos</b></div>`);
+  }
+  if (solution.partial) {
+    rows.push(`<div><span>Fracción parcial</span><b class="summary-math">${mathToString(exprToLatex(solution.partial.dec), false)}</b></div>`);
+  }
+  const note = d?.message || (!solution.anti ? solution.symbolicError : "");
+  if (note) rows.push(`<div class="summary-note"><span>Diagnóstico</span><b>${escapeHtml(note)}</b></div>`);
+  summary.innerHTML = rows.join("");
+}
+
+const RULE_NUMERIC_LABEL = "Integración numérica adaptativa (Gauss–Kronrod)";
+
+function integralSolutionSteps(solution) {
+  const d = solution.definite;
+  const latexExpr = exprToLatex(solution.expr);
+  const steps = [{
+    label: "Planteamiento",
+    tex: d ? `\\int_{${boundTex(d.a)}}^{${boundTex(d.b)}}\\!\\left(${latexExpr}\\right)dx` : `\\int\\!\\left(${latexExpr}\\right)dx`,
+    desc: d ? "Identificamos una integral definida." : "Identificamos una integral indefinida."
+  }];
+  if (solution.partial) steps.push(...solution.partial.steps);
+  if (solution.anti) {
+    const rule = solution.rules.join(" + ");
+    steps.push(
+      { label: "Fórmula usada", tex: formulaForRule(rule), desc: rule },
+      { label: d ? "Antiderivada" : "Resultado exacto", tex: `F(x)=${exprToLatex(solution.anti)}+C`, desc: "Primitiva verificada numéricamente: F'(x) coincide con f(x)." }
+    );
+  } else {
+    steps.push({ label: "Sin primitiva elemental", tex: "", desc: d ? `${solution.symbolicError} Calculamos el valor numéricamente.` : `${solution.symbolicError} Escribe límites a y b para obtener el valor numérico.` });
+  }
+  if (d) {
+    if (d.status !== "ok") steps.push({ label: "Diagnóstico", tex: "", desc: d.message });
+    if (d.method === "symbolic") {
+      const exact = `\\left[F(x)\\right]_{${boundTex(d.a)}}^{${boundTex(d.b)}}=F(${boundTex(d.b)})-F(${boundTex(d.a)})`;
+      steps.push({ label: "Evaluación", tex: `${exact}=${valueTex(d.value)}`, desc: "Aplicamos el teorema fundamental del cálculo." });
+    } else if (d.status !== "divergent" && d.status !== "undefined") {
+      if (d.message && d.status === "ok") steps.push({ label: "Aviso", tex: "", desc: d.message });
+      steps.push({ label: "Valor numérico", tex: formulaForRule(RULE_NUMERIC_LABEL), desc: d.status === "improper" ? "Integramos por tramos alrededor de las singularidades y comprobamos que el área converge." : "Cuadratura adaptativa: subdivide donde el error estimado es mayor." });
+    }
+    if (Number.isFinite(d.value)) steps.push({ label: "Decimal", tex: `\\approx ${fmt(d.value, 8)}`, desc: "Valor numérico final." });
+  }
+  return steps.map((step, index) => ({ ...step, n: index + 1 }));
+}
+
+function showIntegralError(message, fieldId) {
+  const result = $("integralResult");
+  result.textContent = `Error: ${message}`;
+  result.classList.add("is-error");
+  markField(fieldId, message);
+  $("solverSummary").innerHTML = "";
+  renderSteps("integralSteps", [{ n: 1, label: "Revisa la entrada", tex: "", desc: message }]);
 }
 
 function solveIntegralAdvanced() {
@@ -1736,91 +928,50 @@ function solveIntegralAdvanced() {
   const aText = $("integralA").value.trim();
   const bText = $("integralB").value.trim();
   const result = $("integralResult");
-  result.style.color = "";
+  result.classList.remove("is-error");
+  ["integralExpr", "integralA", "integralB"].forEach(id => markField(id));
   updateMathPreviews();
 
   try {
-    const partial = decomposePartial(expr);
-    const antiderivative = partial?.intg || integrateSimple(expr);
-    const latexExpr = exprToLatex(expr);
-    const latexAnti = exprToLatex(antiderivative);
-    const rule = integrationRuleName(expr, partial);
-    updateMathPreviews();
-
-    if (aText && bText) {
-      const fn = compile(expr);
-      const a = Number(evaluateBound(aText));
-      const b = Number(evaluateBound(bText));
-      const symbolicValue = evaluateAntiderivative(antiderivative, a, b);
-      const value = Number.isFinite(symbolicValue) ? symbolicValue : simpson(fn, a, b);
-      const exactTex = `\\left[${latexAnti}\\right]_{${fmt(a)}}^{${fmt(b)}}`;
-      const valueFraction = fractionValueText(value);
-      const finalValueTex = valueTex(value);
-      const exactWithValueTex = valueFraction ? `${exactTex}=${finalValueTex}` : exactTex;
-      renderSolverSummary(rule, exactWithValueTex, value, partial);
-      renderMath(result, `\\int_{${fmt(a)}}^{${fmt(b)}}\\!\\left(${latexExpr}\\right)dx=${exactWithValueTex}\\approx ${fmt(value, 8)}`, true);
-
-      const steps = [
-        { n: 1, label: "Planteamiento", tex: `\\int_{${fmt(a)}}^{${fmt(b)}}\\!\\left(${latexExpr}\\right)dx`, desc: "Identificamos una integral definida." }
-      ];
-      if (partial) steps.push(...partial.steps.map((step, index) => ({ n: index + 2, label: step.label, tex: step.tex, desc: step.desc })));
-      const n = steps.length + 1;
-      steps.push(
-        { n, label: "Fórmula usada", tex: formulaForRule(rule), desc: rule },
-        { n: n + 1, label: "Antiderivada", tex: `F(x)=${latexAnti}+C`, desc: "Calculamos una primitiva simbólica." },
-        { n: n + 2, label: "Evaluación", tex: exactWithValueTex, desc: "Aplicamos el teorema fundamental del cálculo." },
-        { n: n + 3, label: "Decimal", tex: `\\approx ${fmt(value, 8)}`, desc: "Valor numérico final." }
-      );
-      if (valueFraction) {
-        steps.splice(steps.length - 1, 0, { n: 0, label: "Fraccion", tex: finalValueTex, desc: "Equivalente fraccionario del resultado." });
-        steps.forEach((step, index) => { step.n = index + 1; });
-      }
-      renderSteps("integralSteps", steps);
-    } else {
-      const exactTex = `${latexAnti}+C`;
-      renderSolverSummary(rule, exactTex, NaN, partial);
-      renderMath(result, `\\int\\!\\left(${latexExpr}\\right)dx=${exactTex}`, true);
-
-      const steps = [
-        { n: 1, label: "Planteamiento", tex: `\\int\\!\\left(${latexExpr}\\right)dx`, desc: "Identificamos una integral indefinida." }
-      ];
-      if (partial) steps.push(...partial.steps.map((step, index) => ({ n: index + 2, label: step.label, tex: step.tex, desc: step.desc })));
-      const n = steps.length + 1;
-      steps.push(
-        { n, label: "Fórmula usada", tex: formulaForRule(rule), desc: rule },
-        { n: n + 1, label: "Resultado exacto", tex: exactTex, desc: "La constante C representa todas las primitivas." }
-      );
-      renderSteps("integralSteps", steps);
-    }
-    animateSteps("#integralSteps");
+    compile(expr);
   } catch (error) {
-    if (aText && bText) {
-      try {
-        const fn = compile(expr);
-        const a = Number(evaluateBound(aText));
-        const b = Number(evaluateBound(bText));
-        const value = simpson(fn, a, b);
-        const rule = "Integración numérica por Simpson";
-        renderSolverSummary(rule, `\\int_{${fmt(a)}}^{${fmt(b)}} f(x)\\,dx`, value, null);
-        renderMath(result, `\\int_{${fmt(a)}}^{${fmt(b)}}\\!\\left(${exprToLatex(expr)}\\right)dx\\approx ${fmt(value, 8)}`, true);
-        renderSteps("integralSteps", [
-          { n: 1, label: "Sin regla simbólica", tex: `\\int_{${fmt(a)}}^{${fmt(b)}}\\!\\left(${exprToLatex(expr)}\\right)dx`, desc: "No encontré una primitiva exacta con las reglas locales." },
-          { n: 2, label: "Fórmula usada", tex: formulaForRule(rule), desc: "Usamos Simpson compuesto para aproximar el área." },
-          { n: 3, label: "Decimal", tex: `\\approx ${fmt(value, 8)}`, desc: "Resultado aproximado." }
-        ]);
-      } catch (inner) {
-        result.textContent = `Error: ${inner.message}`;
-        result.style.color = "var(--red)";
-      }
-    } else {
-      result.textContent = `Error: ${error.message}`;
-      result.style.color = "var(--red)";
-      renderSteps("integralSteps", [
-        { n: 1, label: "Sin regla", tex: "", desc: "Para indefinidas soporta polinomios, sin, cos, exp, 1/x, sec(x)**2 y fracciones parciales reconocidas. Para funciones generales coloca límites a y b para obtener decimal." }
-      ]);
+    showIntegralError(error.message, "integralExpr");
+    return;
+  }
+  if (Boolean(aText) !== Boolean(bText)) {
+    showIntegralError("Escribe ambos límites a y b, o déjalos vacíos para la integral indefinida.", aText ? "integralB" : "integralA");
+    return;
+  }
+  for (const [id, text] of [["integralA", aText], ["integralB", bText]]) {
+    if (!text) continue;
+    try {
+      evaluateBound(text);
+    } catch (error) {
+      showIntegralError(error.message, id);
+      return;
     }
   }
+
+  let solution;
+  try {
+    solution = solveIntegral(expr, aText, bText);
+  } catch (error) {
+    showIntegralError(error.message, "integralExpr");
+    return;
+  }
+
+  renderSolverSummary(solution);
+  if (solution.definite) {
+    renderMath(result, definiteResultTex(solution), true);
+  } else if (solution.anti) {
+    renderMath(result, `\\int\\!\\left(${exprToLatex(solution.expr)}\\right)dx=${exprToLatex(solution.anti)}+C`, true);
+  } else {
+    result.textContent = "Sin primitiva elemental. Añade límites a y b para calcular el valor numérico.";
+  }
+  renderSteps("integralSteps", integralSolutionSteps(solution));
+  animateSteps("#integralSteps");
 }
+
 
 function cycleExample(id, examples) {
   const current = $(id).value;
@@ -1984,39 +1135,6 @@ function initIcons() {
   });
 }
 
-function parseImportedText(text, fileName = "") {
-  const clean = String(text || "").trim();
-  if (!clean) throw new Error("El archivo está vacío.");
-
-  if (/\.json$/i.test(fileName) || clean.startsWith("{")) {
-    const data = JSON.parse(clean);
-    return {
-      expr: data.expr || data.expression || data.funcion || data.function,
-      a: data.a,
-      b: data.b,
-      n: data.n,
-      method: data.method || data.metodo
-    };
-  }
-
-  const config = {};
-  const lines = clean.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
-  for (const line of lines) {
-    const match = line.match(/^([a-zA-Z_]\w*)\s*[:=,]\s*(.+)$/);
-    if (!match) continue;
-    const key = match[1].toLowerCase();
-    const value = match[2].trim();
-    if (["f", "fx", "expr", "expression", "funcion", "function"].includes(key)) config.expr = value;
-    if (key === "a") config.a = value;
-    if (key === "b") config.b = value;
-    if (key === "n") config.n = value;
-    if (["method", "metodo"].includes(key)) config.method = value;
-  }
-
-  if (!config.expr && lines.length) config.expr = lines[0].replace(/^f\s*\(\s*x\s*\)\s*=/i, "");
-  return config;
-}
-
 function applyImportedConfig(config) {
   if (!config.expr) throw new Error("No encontré una función en el archivo.");
   $("exprInput").value = config.expr;
@@ -2063,27 +1181,6 @@ function cmToCanvasPoint(point) {
   };
 }
 
-function polygonYIntervalsAtX(x, polygon) {
-  const ys = [];
-  for (let i = 0; i < polygon.length; i++) {
-    const p = polygon[i];
-    const q = polygon[(i + 1) % polygon.length];
-    if (Math.abs(p.x - q.x) < 1e-12) continue;
-    const minX = Math.min(p.x, q.x);
-    const maxX = Math.max(p.x, q.x);
-    if (x < minX || x >= maxX) continue;
-    const t = (x - p.x) / (q.x - p.x);
-    ys.push(p.y + t * (q.y - p.y));
-  }
-  ys.sort((a, b) => a - b);
-
-  const intervals = [];
-  for (let i = 0; i < ys.length - 1; i += 2) {
-    if (ys[i + 1] > ys[i]) intervals.push([ys[i], ys[i + 1]]);
-  }
-  return intervals;
-}
-
 function getA4Selection() {
   const points = A4.points;
   const rects = [];
@@ -2112,10 +1209,13 @@ function getA4Selection() {
     }
   }
 
+  const polygonCm = points.map(pointToCm);
   return {
     rects,
     segments: rects.length,
-    area: rects.reduce((sum, rect) => sum + rect.area, 0)
+    area: rects.reduce((sum, rect) => sum + rect.area, 0),
+    polygonArea: polygonArea(polygonCm),
+    selfIntersects: polygonSelfIntersects(polygonCm)
   };
 }
 
@@ -2201,12 +1301,18 @@ function updateA4Metrics(selection = getA4Selection()) {
   $("a4FileName").textContent = A4.fileName;
   $("a4PointCount").textContent = String(A4.points.length);
   $("a4RectCount").textContent = String(selection.segments);
-  $("a4AreaCm").textContent = A4.points.length >= 3 ? `${fmt(selection.area, 3)} cm²` : "0 cm²";
+  const closed = A4.points.length >= 3;
+  $("a4AreaCm").textContent = closed ? `${fmt(selection.area, 3)} cm²` : "0 cm²";
+  if ($("a4PolygonArea")) $("a4PolygonArea").textContent = closed ? `${fmt(selection.polygonArea, 3)} cm²` : "0 cm²";
+  const difference = closed && selection.polygonArea > 0
+    ? Math.abs(selection.area - selection.polygonArea) / selection.polygonArea * 100
+    : 0;
   $("a4PointList").innerHTML = A4.points.length
     ? [
-      A4.points.length >= 3
-        ? `<div>Riemann punto medio: ${selection.segments} rectángulos · Δx=${fmt(A4.cellCm, 2)} cm</div>`
+      closed
+        ? `<div>Riemann punto medio: ${selection.segments} rectángulos · Δx=${fmt(A4.cellCm, 2)} cm · diferencia con el área exacta del polígono: ${fmt(difference, 2)} %</div>`
         : "<div>Marca al menos 3 puntos para cerrar el área.</div>",
+      selection.selfIntersects ? "<div class=\"a4-warning\">El contorno se cruza a sí mismo: marca los puntos en orden alrededor del área.</div>" : "",
       ...A4.points.map((point, index) => {
       const cm = pointToCm(point);
       return `<div>P${index + 1}: x=${fmt(cm.x, 2)} cm, y=${fmt(cm.y, 2)} cm</div>`;
@@ -2371,7 +1477,7 @@ function addChatMessage(role, text) {
 function localAssistantReply(question) {
   const expr = $("integralExpr")?.value || STATE.input?.expr || "f(x)";
   if (/formula|log|ln/i.test(question)) return "Para logaritmos usamos la forma integral u'/u dx = ln(abs(u)) + C. Si aparece una fraccion racional, primero conviene descomponerla en fracciones parciales.";
-  if (/decimal|aprox|valor/i.test(question)) return "Para obtener decimal coloca limites a y b. La app evalua la antiderivada si existe; si no, usa Simpson compuesto.";
+  if (/decimal|aprox|valor/i.test(question)) return "Para obtener decimal coloca limites a y b. La app evalua la antiderivada si existe y la contrasta con integracion numerica adaptativa (Gauss-Kronrod), que tambien detecta integrales impropias y divergentes.";
   if (/primitiva|antiderivada|compar/i.test(question)) return "La calculadora muestra la antiderivada F(x) y la usa para evaluar integrales definidas cuando hay limites.";
   return `Estoy revisando ${linearExpr(expr)}. Pulsa Resolver para ver regla usada, exacto, decimal y procedimiento paso a paso.`;
 }
@@ -2432,37 +1538,35 @@ function currentRiemannSnapshot() {
     && STATE.input.n === input.n
     && STATE.input.method === input.method;
   if (sameInput && STATE.fn && STATE.data) {
-    return { input, fn: STATE.fn, data: STATE.data, exact: STATE.exact, areas: STATE.areas };
+    return { input, fn: STATE.fn, data: STATE.data, exact: STATE.exact, areas: STATE.areas, integral: STATE.integral };
   }
-  const fn = compile(input.expr);
-  return {
-    input,
-    fn,
-    data: riemann(fn, input.a, input.b, input.n, input.method),
-    exact: simpson(fn, input.a, input.b),
-    areas: signedAreas(fn, input.a, input.b)
-  };
+  return computeRiemann(input);
 }
 
 function buildRiemannSolutionText() {
   try {
-    const { input, data, exact, areas } = currentRiemannSnapshot();
+    const { input, data, exact, areas, integral } = currentRiemannSnapshot();
     const first = data.rects[0];
     const infinite = $("infinityInput")?.checked;
     const visibleN = infinite ? "n -> infinito" : String(input.manualN);
+    const finiteIntegral = Number.isFinite(exact);
     const error = Math.abs((infinite ? exact : data.sum) - exact);
-    return [
+    const lines = [
       "Solucion dinamica de la suma de Riemann:",
       `Funcion: f(x)=${linearExpr(input.expr)}.`,
       `Intervalo: [${fmt(input.a)}, ${fmt(input.b)}]. Rectangulos: ${visibleN}. Metodo: ${methodLabel(input.method)}.`,
       `Formula usada: Delta x = (b - a)/n y ${riemannFormulaText(input.method)}.`,
       `Delta x = (${fmt(input.b)} - (${fmt(input.a)}))/${infinite ? "n" : input.manualN} = ${fmt(data.dx)}.`,
       `Primer rectangulo: [${fmt(first.p)}, ${fmt(first.q)}], x_1* = ${fmt(first.sample)}, f(x_1*) = ${fmt(first.y)}, area_1 = ${fmt(first.area)}.`,
-      valueLine(infinite ? exact : data.sum, "Suma"),
-      valueLine(exact, "Integral de referencia"),
-      `Error: ${fmt(error, 8)}.`,
-      `Area positiva: ${fmt(areas.pos, 8)}. Area negativa: ${fmt(areas.neg, 8)}. Area total: ${fmt(areas.total, 8)}.`
-    ].join("\n");
+      valueLine(infinite ? exact : data.sum, "Suma")
+    ];
+    if (finiteIntegral) {
+      lines.push(valueLine(exact, "Integral de referencia"), `Error: ${fmt(error, 8)}.`);
+      lines.push(`Area positiva: ${fmt(areas.pos, 8)}. Area negativa: ${fmt(areas.neg, 8)}. Area total: ${fmt(areas.total, 8)}.`);
+    }
+    const note = integralStatusMessage(integral || {});
+    if (note) lines.push(`Diagnostico: ${note}`);
+    return lines.join("\n");
   } catch (error) {
     return `No pude resolver la suma de Riemann: ${error.message}`;
   }
@@ -2470,13 +1574,15 @@ function buildRiemannSolutionText() {
 
 function linearRuleFormula(rule) {
   const cleanRule = normalizeQueryText(rule);
-  if (cleanRule.includes("fracciones parciales")) return "A/(x - r1) + B/(x - r2); integral k/(x - r) dx = k*ln(abs(x - r)) + C";
-  if (cleanRule.includes("por partes")) return "integral ln(x) dx = x*ln(abs(x)) - x + C";
+  if (cleanRule.includes("fracciones parciales")) return "P(x)/Q(x) = A/(x - r1) + B/(x - r2) + ...; integral k/(x - r) dx = k*ln(abs(x - r)) + C";
+  if (cleanRule.includes("por partes")) return "integral u dv = u*v - integral v du";
+  if (cleanRule.includes("cambio de variable lineal")) return "integral f(a*x + b) dx = F(a*x + b)/a + C";
+  if (cleanRule.includes("cambio de variable")) return "integral f(g(x))*g'(x) dx = F(g(x)) + C";
   if (cleanRule.includes("arcotangente")) return "integral 1/(1 + x^2) dx = atan(x) + C";
   if (cleanRule.includes("logaritmica")) return "integral u'/u dx = ln(abs(u)) + C";
-  if (cleanRule.includes("trigonometrica")) return "integral sin(x) dx = -cos(x) + C; integral cos(x) dx = sin(x) + C";
+  if (cleanRule.includes("trigonometric")) return "integral sin(x) dx = -cos(x) + C; integral cos(x) dx = sin(x) + C";
   if (cleanRule.includes("exponencial")) return "integral exp(x) dx = exp(x) + C";
-  if (cleanRule.includes("simpson")) return "Simpson compuesto: area aprox. = h/3*(f(x0)+4*f(x1)+2*f(x2)+...+f(xn))";
+  if (cleanRule.includes("numerica")) return "Gauss-Kronrod adaptativo: suma ponderada de f en nodos que se refinan donde el error es mayor";
   return "integral x^n dx = x^(n + 1)/(n + 1) + C, con n != -1";
 }
 
@@ -2484,59 +1590,43 @@ function buildIntegralSolutionText() {
   const expr = $("integralExpr")?.value || "";
   const aText = $("integralA")?.value.trim() || "";
   const bText = $("integralB")?.value.trim() || "";
-  const hasBounds = Boolean(aText && bText);
 
+  let solution;
   try {
-    const partial = decomposePartial(expr);
-    const antiderivative = partial?.intg || integrateSimple(expr);
-    const rule = integrationRuleName(expr, partial);
-    const lines = [
-      "Solucion dinamica de la integral:",
-      `Integrando: ${linearExpr(expr)}.`,
-      `Formula usada: ${linearRuleFormula(rule)}.`,
-      `Regla detectada: ${rule}.`
-    ];
-    if (partial) lines.push(`Fraccion parcial: ${linearExpr(partial.dec)}.`);
-    lines.push(`Antiderivada: F(x) = ${linearExpr(antiderivative)} + C.`);
-
-    if (hasBounds) {
-      const a = Number(evaluateBound(aText));
-      const b = Number(evaluateBound(bText));
-      const symbolicValue = evaluateAntiderivative(antiderivative, a, b);
-      const value = Number.isFinite(symbolicValue) ? symbolicValue : simpson(compile(expr), a, b);
-      lines.push(`Evaluacion exacta: F(${fmt(b)}) - F(${fmt(a)}).`);
-      lines.push(valueLine(value, "Integral definida"));
-    } else {
-      lines.push("Decimal: sin limites definidos. Si colocas a y b, calculo el valor decimal.");
-    }
-
-    if (partial?.steps?.length) {
-      lines.push("Procedimiento:");
-      partial.steps.forEach((step, index) => {
-        lines.push(`${index + 1}. ${step.label}: ${step.desc}`);
-      });
-    } else {
-      lines.push("Procedimiento: identificar la regla, integrar termino a termino y sumar la constante C.");
-    }
-    return lines.join("\n");
+    solution = solveIntegral(expr, aText && bText ? aText : "", aText && bText ? bText : "");
   } catch (error) {
-    if (hasBounds) {
-      try {
-        const a = Number(evaluateBound(aText));
-        const b = Number(evaluateBound(bText));
-        const value = simpson(compile(expr), a, b);
-        return [
-          "No encontre primitiva simbolica local para esta forma.",
-          "Use integracion numerica por Simpson compuesto.",
-          `Integrando: ${linearExpr(expr)}. Intervalo: [${fmt(a)}, ${fmt(b)}].`,
-          valueLine(value, "Integral aproximada")
-        ].join("\n");
-      } catch (inner) {
-        return `No pude resolver la integral: ${inner.message}`;
-      }
-    }
-    return `No pude resolver esta indefinida con las reglas locales: ${error.message}. Prueba con limites a y b para decimal por Simpson.`;
+    return `No pude resolver la integral: ${error.message}`;
   }
+
+  const lines = ["Solucion dinamica de la integral:", `Integrando: ${linearExpr(expr)}.`];
+  if (solution.anti) {
+    const rule = solution.rules.join(" + ");
+    lines.push(`Formula usada: ${linearRuleFormula(rule)}.`, `Regla detectada: ${rule}.`);
+    if (solution.partial) lines.push(`Fraccion parcial: ${linearExpr(solution.partial.dec)}.`);
+    lines.push(`Antiderivada: F(x) = ${linearExpr(solution.anti)} + C (verificada: F'(x) = f(x)).`);
+  } else {
+    lines.push(`${solution.symbolicError}`);
+  }
+
+  const d = solution.definite;
+  if (d) {
+    if (d.method === "symbolic") lines.push(`Evaluacion exacta: F(${fmt(d.b)}) - F(${fmt(d.a)}).`);
+    else if (Number.isFinite(d.value)) lines.push(`Formula usada: ${linearRuleFormula(RULE_NUMERIC_LABEL)}.`);
+    if (d.message) lines.push(`Diagnostico: ${d.message}`);
+    if (Number.isFinite(d.value)) lines.push(valueLine(d.value, "Integral definida"));
+  } else {
+    lines.push("Decimal: sin limites definidos. Si colocas a y b, calculo el valor decimal.");
+  }
+
+  if (solution.partial?.steps?.length) {
+    lines.push("Procedimiento:");
+    solution.partial.steps.forEach((step, index) => {
+      lines.push(`${index + 1}. ${step.label}: ${step.desc}`);
+    });
+  } else if (solution.anti) {
+    lines.push("Procedimiento: identificar la regla, integrar termino a termino y sumar la constante C.");
+  }
+  return lines.join("\n");
 }
 
 function buildImportSolutionText() {
@@ -3043,15 +2133,16 @@ function bindEvents() {
   document.querySelectorAll(".stab").forEach(tab => tab.addEventListener("click", () => switchSub(tab.dataset.st)));
 
   ["exprInput", "aInput", "bInput", "methodInput", "infinityInput", "rectsInput", "samplesInput", "gridInput"]
-    .forEach(id => $(id).addEventListener("input", updateAll));
+    .forEach(id => $(id).addEventListener("input", scheduleUpdate));
 
   $("nInput").addEventListener("input", () => {
     $("nRange").value = clampN($("nInput").value);
-    updateAll();
+    scheduleUpdate();
   });
+  $("nInput").addEventListener("change", updateAll);
   $("nRange").addEventListener("input", () => {
     $("nInput").value = $("nRange").value;
-    updateAll();
+    scheduleUpdate();
   });
 
   document.querySelectorAll(".seg-btn").forEach(btn => {
@@ -3133,6 +2224,9 @@ function bindEvents() {
     if (!el) return;
     el.addEventListener("focus", event => { activeMathInput = event.target; });
     el.addEventListener("input", updateMathPreviews);
+    el.addEventListener("keydown", event => {
+      if (event.key === "Enter") solveIntegralAdvanced();
+    });
   });
   document.querySelectorAll(".math-keypad button").forEach(btn => {
     btn.addEventListener("click", () => handleMathKey(btn));
@@ -3144,7 +2238,7 @@ function bindEvents() {
     solveIntegralAdvanced();
   });
   $("integralExampleBtn").addEventListener("click", () => {
-    cycleExample("integralExpr", ["4/x - 3/x**2", "x**2", "sin(x)", "(x + 5)/(x**2 + 3*x + 2)", "(2*x + 3)/(x**2 + 4)"]);
+    cycleExample("integralExpr", ["4/x - 3/x**2", "x**2", "sin(x)", "(x + 5)/(x**2 + 3*x + 2)", "(2*x + 3)/(x**2 + 4)", "x*exp(x)", "2*x*cos(x**2)", "sqrt(1 - x**2)"]);
     $("integralA").value = "";
     $("integralB").value = "";
     solveIntegralAdvanced();
@@ -3183,7 +2277,7 @@ function bindEvents() {
   });
 
   window.addEventListener("resize", () => {
-    try { drawGraph(readInputs()); } catch (_) {}
+    if (STATE.input) drawGraph(STATE.input);
   });
 }
 

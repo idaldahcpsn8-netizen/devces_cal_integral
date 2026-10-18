@@ -1,0 +1,9 @@
+{
+  "name": "dev-aldah-v3",
+  "private": true,
+  "description": "Studio de cálculo integral: sumas de Riemann, calculadora de integrales y áreas sobre hoja A4.",
+  "scripts": {
+    "start": "python3 riemann_ai_server.py",
+    "test": "node --test && python3 -m unittest discover -s tests"
+  }
+}
