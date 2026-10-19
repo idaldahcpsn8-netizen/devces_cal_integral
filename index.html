@@ -231,6 +231,13 @@
               <button id="a4UndoBtn" class="text-btn" type="button">Deshacer punto</button>
               <button id="a4ClearBtn" class="text-btn" type="button">Limpiar puntos</button>
             </div>
+            <div class="a4-templates">
+              <div class="a4-templates-head">
+                <strong>Plantillas</strong>
+                <span>Escenas a escala real: mide el área marcada en rosa y compárala con la integral.</span>
+              </div>
+              <div id="a4TemplateList" class="a4-template-list"></div>
+            </div>
             <div class="import-help">
               <p>Haz clic alrededor del área en orden. Con 3 puntos o más la figura se cierra y se llena con rectángulos de punto medio de 0.5 cm.</p>
               <p>Un archivo .txt o .json con <code>f(x) = …</code>, <code>a</code>, <code>b</code> y <code>n</code> configura la suma de Riemann.</p>
@@ -240,6 +247,16 @@
                 <canvas id="a4Canvas" width="700" height="990" aria-label="Hoja A4 para seleccionar puntos"></canvas>
               </div>
               <div class="a4-side">
+                <div id="a4TemplateCard" class="a4-template-card" hidden>
+                  <span class="a4-template-kicker">Problema</span>
+                  <strong id="a4TemplateTitle"></strong>
+                  <p id="a4TemplateText"></p>
+                  <div class="a4-template-actions">
+                    <button id="a4AutoBtn" class="text-btn" type="button">Marcar contorno</button>
+                    <button id="a4SolutionBtn" class="text-btn primary" type="button" aria-expanded="false" aria-controls="a4Solution">Ver solución</button>
+                  </div>
+                  <div id="a4Solution" class="a4-solution" hidden></div>
+                </div>
                 <div class="a4-metric"><span>Archivo</span><b id="a4FileName">Sin archivo</b></div>
                 <div class="a4-metric"><span>Puntos</span><b id="a4PointCount">0</b></div>
                 <div class="a4-metric"><span>Rectángulos</span><b id="a4RectCount">0</b></div>
@@ -420,6 +437,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script src="./integral_core.js"></script>
   <script src="./games.js"></script>
+  <script src="./a4_templates.js"></script>
   <script src="./riemann_sumas_javascript.js"></script>
 </body>
 </html>

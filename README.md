@@ -15,6 +15,7 @@ Interfaz web educativa para visualizar sumas de Riemann, resolver integrales y t
   - El valor final se resalta, se muestra la forma exacta (fracción o múltiplo de π) y se puede **copiar** con un botón.
   - **Tabla de integrales** desplegable con las fórmulas básicas; «Probar» carga y resuelve un ejemplo de cada una.
 - **Importar archivo**: imagen/PDF en hoja A4, marcar puntos y aproximar el área con rectángulos de punto medio; se compara con el área exacta del polígono y se avisa si el contorno se cruza.
+  - **Plantillas** listas para practicar, dibujadas a escala real: piscina bajo un puente, piscina en forma de riñón, túnel en la montaña, terreno junto al río, rampa de skate, jardín entre dos senderos y puente colgante. La región a medir está marcada en rosa y limitada por funciones conocidas, así que la solución muestra f(x), g(x), la integral, el área exacta y el error de tu medición. «Marcar contorno» coloca los puntos automáticamente.
 - **Juegos** por rondas de 10 preguntas, con progreso, aciertos, racha y mejor racha (guardada en el navegador):
   - *Métodos*: elegir cómo se resuelve una integral (inmediata, cambio de variable, partes, fracciones parciales).
   - *Derivadas*: elegir la regla (potencia, producto, cociente, cadena).
@@ -58,6 +59,7 @@ Ejecuta `node --test` (núcleo matemático, `tests/core.test.js`; juegos, `tests
 
 - `index.html` — estructura de la interfaz.
 - `integral_core.js` — núcleo matemático sin DOM: analizador de expresiones, integración numérica y simbólica, formato LaTeX/lineal. Se puede probar en Node.
+- `a4_templates.js` — escenas de la hoja A4 (dibujo SVG a escala, contorno y área exacta por integral).
 - `games.js` — bancos de preguntas y generador de rondas de los juegos (sin DOM, probado en Node).
 - `riemann_sumas_javascript.js` — interfaz: menú de inicio, gráficas, tablas, calculadora, hoja A4 y juegos.
 - `riemann_sumas_javascript.css` — estilos.

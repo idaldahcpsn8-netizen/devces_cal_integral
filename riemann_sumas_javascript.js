@@ -23,7 +23,9 @@ const A4 = {
   cellCm: 0.5,
   points: [],
   image: null,
-  fileName: "Sin archivo"
+  fileName: "Sin archivo",
+  template: null,
+  showSolution: false
 };
 
 let activeMathInput = null;
@@ -1599,14 +1601,17 @@ function renderA4Canvas() {
     ctx.stroke();
   }
 
+  // El contorno automático tiene muchos puntos: se dibujan pequeños y sin número.
+  const compact = A4.autoMarked && A4.points.length > 12;
   A4.points.forEach((point, index) => {
     ctx.fillStyle = "#2563eb";
     ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 2;
+    ctx.lineWidth = compact ? 1.5 : 2;
     ctx.beginPath();
-    ctx.arc(point.x, point.y, 6, 0, Math.PI * 2);
+    ctx.arc(point.x, point.y, compact ? 3.5 : 6, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
+    if (compact) return;
     ctx.fillStyle = "#1d1d1f";
     ctx.font = "600 13px -apple-system, BlinkMacSystemFont, Inter, 'Segoe UI', sans-serif";
     ctx.fillText(String(index + 1), point.x + 8, point.y - 8);
@@ -1637,14 +1642,104 @@ function updateA4Metrics(selection = getA4Selection()) {
       })
     ].join("")
     : "Haz clic sobre la hoja para rodear el área.";
+  renderA4Solution(selection);
+}
+
+// ── Plantillas de la hoja A4 (a4_templates.js) ──────────────────────────────
+
+function renderA4TemplateList() {
+  const host = $("a4TemplateList");
+  if (!host || typeof A4Templates === "undefined") return;
+  host.innerHTML = A4Templates.TEMPLATES.map(t => `
+    <button class="a4-template" type="button" data-template="${t.id}">
+      <img src="${A4Templates.svgDataUrl(t)}" alt="" loading="lazy" width="105" height="148">
+      <span>${t.name}</span>
+    </button>`).join("");
+}
+
+function syncA4TemplateCard() {
+  const t = A4.template;
+  document.querySelectorAll(".a4-template").forEach(button => {
+    button.classList.toggle("is-active", Boolean(t) && button.dataset.template === t.id);
+  });
+  $("a4TemplateCard").hidden = !t;
+  if (!t) return;
+  $("a4TemplateTitle").textContent = t.name;
+  $("a4TemplateText").textContent = t.statement;
+  $("a4SolutionBtn").textContent = A4.showSolution ? "Ocultar solución" : "Ver solución";
+  $("a4SolutionBtn").setAttribute("aria-expanded", String(A4.showSolution));
+  $("a4Solution").hidden = !A4.showSolution;
+  if (A4.showSolution) renderA4Solution();
+}
+
+// Solución: integral, valor exacto y comparación con lo que midió el alumno.
+function renderA4Solution(selection = getA4Selection()) {
+  const t = A4.template;
+  const host = $("a4Solution");
+  if (!t || !host || host.hidden) return;
+  const exact = A4Templates.exactArea(t);
+  const decimal = fmt(exact, 4);
+  const value = t.exact === decimal
+    ? `=\\textcolor{#2563eb}{${decimal}}\\ \\text{cm}^2`
+    : `${t.exact ? `=${t.exact}` : ""}\\approx\\textcolor{#2563eb}{${decimal}}\\ \\text{cm}^2`;
+  let comparison = "<p>Marca el contorno (a mano o con «Marcar contorno») para comparar tu medición.</p>";
+  if (A4.points.length >= 3) {
+    const error = Math.abs(selection.area - exact) / exact * 100;
+    const polygonError = Math.abs(selection.polygonArea - exact) / exact * 100;
+    comparison = `
+      <div class="a4-compare"><span>Tu medición con rectángulos</span><b>${fmt(selection.area, 3)} cm² · error ${fmt(error, 2)} %</b></div>
+      <div class="a4-compare"><span>Área de tu polígono</span><b>${fmt(selection.polygonArea, 3)} cm² · error ${fmt(polygonError, 2)} %</b></div>`;
+  }
+  const lines = A4Templates.solutionLines(t);
+  lines.push(`\\phantom{A}${value}`);
+  host.innerHTML = `<div class="a4-solution-math">${lines.map(line => mathToString(line, true)).join("")}</div>${comparison}`;
+}
+
+function loadA4Template(id) {
+  const t = A4Templates.find(id);
+  if (!t) return;
+  const image = new Image();
+  image.onload = () => {
+    A4.image = image;
+    A4.fileName = `Plantilla: ${t.name}`;
+    A4.template = t;
+    A4.showSolution = false;
+    A4.points = [];
+    $("importFileInput").value = "";
+    syncA4TemplateCard();
+    renderA4Canvas();
+    setStatus(`Plantilla «${t.name}» cargada: rodea el área marcada en rosa`);
+    document.querySelector(".a4-workbench")?.scrollIntoView({ behavior: REDUCED_MOTION ? "auto" : "smooth", block: "start" });
+  };
+  image.src = A4Templates.svgDataUrl(t);
+}
+
+function autoMarkA4Template() {
+  if (!A4.template) return;
+  A4.points = A4Templates.boundary(A4.template).map(cmToCanvasPoint);
+  A4.autoMarked = true;
+  renderA4Canvas();
+}
+
+function toggleA4Solution() {
+  A4.showSolution = !A4.showSolution;
+  syncA4TemplateCard();
+}
+
+function forgetA4Template() {
+  A4.template = null;
+  A4.showSolution = false;
+  syncA4TemplateCard();
 }
 
 function clearA4Points() {
   A4.points = [];
+  A4.autoMarked = false;
   renderA4Canvas();
 }
 
 function removeA4File() {
+  forgetA4Template();
   A4.image = null;
   A4.fileName = "Sin archivo";
   A4.points = [];
@@ -1662,6 +1757,7 @@ async function loadImageIntoA4(file) {
     image.src = url;
   });
   URL.revokeObjectURL(url);
+  forgetA4Template();
   A4.image = image;
   A4.fileName = file.name || "Imagen";
   clearA4Points();
@@ -1688,6 +1784,7 @@ async function loadPdfIntoA4(file) {
     image.onerror = reject;
     image.src = temp.toDataURL("image/png");
   });
+  forgetA4Template();
   A4.image = image;
   A4.fileName = `${file.name || "PDF"} · página 1`;
   clearA4Points();
@@ -1830,6 +1927,7 @@ function bindEvents() {
   $("a4RemoveFileBtn").addEventListener("click", removeA4File);
   $("a4Canvas").addEventListener("pointerdown", event => {
     event.preventDefault();
+    A4.autoMarked = false;
     A4.points.push(canvasPointFromEvent(event));
     renderA4Canvas();
   });
@@ -1838,6 +1936,12 @@ function bindEvents() {
     renderA4Canvas();
   });
   $("a4ClearBtn").addEventListener("click", clearA4Points);
+  $("a4TemplateList").addEventListener("click", event => {
+    const button = event.target.closest(".a4-template");
+    if (button) loadA4Template(button.dataset.template);
+  });
+  $("a4AutoBtn").addEventListener("click", autoMarkA4Template);
+  $("a4SolutionBtn").addEventListener("click", toggleA4Solution);
 
   $("collapseDetailsBtn").addEventListener("click", () => {
     document.querySelector(".workspace").classList.toggle("details-collapsed");
@@ -1927,6 +2031,7 @@ function bindEvents() {
 function init() {
   bindEvents();
   initIcons();
+  renderA4TemplateList();
   renderA4Canvas();
   renderIntegralTable();
   switchTab("pTabla");
