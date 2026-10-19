@@ -720,10 +720,10 @@ function updateTable() {
     tr.innerHTML = `
       <td>${r.i}</td>
       <td>[${fmt(r.p, 3)}, ${fmt(r.q, 3)}]</td>
-      <td>${fmt(r.sample, 4)}</td>
-      <td>${fmt(r.y, 4)}</td>
-      <td>${fmt(r.area, 4)}</td>
-      <td>${fmt(r.cum, 4)}</td>`;
+      <td>${fmt(r.sample, 3)}</td>
+      <td>${fmt(r.y, 3)}</td>
+      <td>${fmt(r.area, 3)}</td>
+      <td>${fmt(r.cum, 3)}</td>`;
     body.appendChild(tr);
   }
 }
@@ -1652,14 +1652,6 @@ function bindEvents() {
   $("gameNextBtn").addEventListener("click", nextGame);
   $("gameResetBtn").addEventListener("click", resetGame);
 
-
-  const redrawForTheme = () => {
-    if (STATE.input) drawGraph(STATE.input);
-  };
-  if (typeof matchMedia === "function") matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", redrawForTheme);
-  if (typeof MutationObserver === "function") {
-    new MutationObserver(redrawForTheme).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
-  }
 
   window.addEventListener("resize", () => {
     moveNavIndicator();
