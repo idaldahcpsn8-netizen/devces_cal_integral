@@ -94,7 +94,7 @@
         </svg>
         <span class="home-card-body">
           <strong>Juegos</strong>
-          <span>Elige el método correcto (partes, sustitución, fracciones parciales…) y practica las reglas de derivación.</span>
+          <span>Cuatro juegos por rondas: métodos de integración, reglas de derivación, elegir la primitiva y estimar áreas. Con rachas y récord.</span>
         </span>
         <span class="home-cta">Entrar <span aria-hidden="true">→</span></span>
       </button>
@@ -268,15 +268,7 @@
         </section>
 
         <section id="pFormulas" class="pane">
-          <div class="formula-list">
-            <div class="formula-row"><span>Ancho</span><div id="f1"></div></div>
-            <div class="formula-row"><span>Partición</span><div id="f2"></div></div>
-            <div class="formula-row"><span>Izquierda</span><div id="f3"></div></div>
-            <div class="formula-row"><span>Derecha</span><div id="f4"></div></div>
-            <div class="formula-row"><span>Punto medio</span><div id="f5"></div></div>
-            <div class="formula-row"><span>Suma</span><div id="f6"></div></div>
-            <div class="formula-row highlight"><span>Integral</span><div id="f7"></div></div>
-          </div>
+          <div id="formulaCards" class="formula-list"></div>
         </section>
 
         <section id="pResolve" class="pane">
@@ -356,10 +348,15 @@
               <button id="integralSolveBtn" class="text-btn primary" type="button">Resolver</button>
               <button id="integralExampleBtn" class="text-btn" type="button">Ejemplo</button>
               <button id="integralUseMainBtn" class="text-btn" type="button">Usar f(x)</button>
+              <button id="integralCopyBtn" class="text-btn" type="button" disabled>Copiar resultado</button>
             </div>
             <div id="solverSummary" class="solver-summary"></div>
             <div id="integralResult" class="result-box" aria-live="polite"></div>
             <div id="integralSteps" class="steps compact"></div>
+            <details id="integralTable" class="integral-table">
+              <summary><span>Tabla de integrales</span><small>Toca «Probar» para resolver un ejemplo</small></summary>
+              <div id="integralTableRows" class="it-rows"></div>
+            </details>
           </div>
         </section>
 
@@ -368,30 +365,46 @@
             <div class="games-head">
               <div>
                 <strong>Juegos</strong>
-                <p>Elige el método correcto para cada ejercicio.</p>
+                <p>Rondas de 10 preguntas. Responde con un toque o con las teclas 1–4; Enter pasa a la siguiente.</p>
               </div>
             </div>
-            <div class="game-tabs" role="group" aria-label="Juegos disponibles">
-              <button id="integralGameTab" class="game-tab is-active" type="button" data-game="integrals">Integrales</button>
-              <button id="derivativeGameTab" class="game-tab" type="button" data-game="derivatives">Derivadas</button>
+            <div class="game-tabs" role="tablist" aria-label="Juegos disponibles">
+              <button class="game-tab is-active" type="button" role="tab" data-game="methods"><b>Métodos</b><small>de integración</small></button>
+              <button class="game-tab" type="button" role="tab" data-game="derivatives"><b>Derivadas</b><small>reglas</small></button>
+              <button class="game-tab" type="button" role="tab" data-game="primitives"><b>Primitivas</b><small>elige F(x)</small></button>
+              <button class="game-tab" type="button" role="tab" data-game="area"><b>Área</b><small>estima ∫</small></button>
             </div>
-            <div class="game-panel">
+            <div class="game-hud">
+              <ol id="gameProgress" class="game-progress" aria-label="Progreso de la ronda"></ol>
+              <div class="game-stats">
+                <div><span>Aciertos</span><b id="gameScore">0</b></div>
+                <div><span>Racha</span><b id="gameStreak">0</b></div>
+                <div><span>Mejor</span><b id="gameBest">0</b></div>
+              </div>
+            </div>
+            <div id="gamePanel" class="game-panel">
               <div class="game-question">
-                <span id="gameKind">Integrales</span>
-                <strong id="gameExpression">∫ x^2 dx</strong>
-                <p id="gamePrompt">Elige el método que resuelve el ejercicio.</p>
+                <span id="gameKind">Métodos de integración</span>
+                <div id="gameArt" class="game-art" hidden></div>
+                <div id="gameExpression" class="game-expression"></div>
+                <p id="gamePrompt">¿Con qué método se resuelve?</p>
               </div>
               <div id="bubbleArena" class="bubble-arena" aria-label="Opciones del juego"></div>
-              <div class="game-feedback">
-                <div>
-                  <span>Aciertos</span>
-                  <b id="gameScore">0/0</b>
-                </div>
-                <p id="gameFeedbackText">Toca una burbuja para empezar.</p>
+              <div id="gameFeedback" class="game-feedback" aria-live="polite">
+                <p id="gameFeedbackText">Elige una opción para empezar.</p>
+                <div id="gameExplain" class="game-explain"></div>
               </div>
               <div class="action-row">
-                <button id="gameNextBtn" class="text-btn primary" type="button">Siguiente</button>
-                <button id="gameResetBtn" class="text-btn" type="button">Reiniciar juego</button>
+                <button id="gameNextBtn" class="text-btn primary" type="button" disabled>Siguiente</button>
+                <button id="gameResetBtn" class="text-btn" type="button">Nueva ronda</button>
+              </div>
+            </div>
+            <div id="gameSummary" class="game-summary" hidden>
+              <div class="summary-ring"><svg viewBox="0 0 120 120" aria-hidden="true"><circle class="ring-track" cx="60" cy="60" r="52"/><circle id="gameRing" class="ring-value" cx="60" cy="60" r="52"/></svg><b id="gameSummaryScore">0/10</b></div>
+              <strong id="gameSummaryTitle">¡Ronda terminada!</strong>
+              <p id="gameSummaryText"></p>
+              <div class="action-row">
+                <button id="gameAgainBtn" class="text-btn primary" type="button">Jugar otra ronda</button>
               </div>
             </div>
           </div>
@@ -406,6 +419,7 @@
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script src="./integral_core.js"></script>
+  <script src="./games.js"></script>
   <script src="./riemann_sumas_javascript.js"></script>
 </body>
 </html>

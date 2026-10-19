@@ -288,3 +288,20 @@ test("importación de texto y JSON", () => {
   assert.throws(() => C.parseImportedText("{ roto", "datos.json"), /JSON del archivo no es válido/);
   assert.throws(() => C.parseImportedText("   "), /vacío/);
 });
+
+test("la cota teórica del error de Riemann acota el error real", () => {
+  const cases = [["x^2", 0, 2], ["sin(x)", 0, Math.PI], ["exp(x)", -1, 1], ["x^3 - x", -2, 3]];
+  for (const [expr, a, b] of cases) {
+    const exact = C.integrateNumeric(C.compile(expr), a, b).value;
+    for (const method of ["left", "right", "midpoint"]) {
+      for (const n of [4, 25, 200]) {
+        const bound = C.riemannErrorBound(expr, a, b, n, method);
+        const error = Math.abs(C.riemann(C.compile(expr), a, b, n, method).sum - exact);
+        assert.ok(bound, `${expr} ${method}`);
+        assert.ok(error <= bound.bound * (1 + 1e-6) + 1e-12, `${expr} ${method} n=${n}: ${error} > ${bound.bound}`);
+      }
+    }
+  }
+  close(C.riemannErrorBound("x^2", 0, 2, 10, "midpoint").bound, (2 * 8) / (24 * 100));
+  assert.equal(C.riemannErrorBound("1/x", -1, 1, 10, "left"), null);
+});

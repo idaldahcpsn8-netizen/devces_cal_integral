@@ -2229,6 +2229,34 @@ const IntegralCore = (() => {
     return analyzeIntegral(fn, a, b).areas;
   }
 
+  // Cota teórica del error de la suma de Riemann:
+  //   izquierda/derecha: |E| ≤ M₁ (b − a)² / (2n),  M₁ = máx |f′|
+  //   punto medio:       |E| ≤ M₂ (b − a)³ / (24n²), M₂ = máx |f″|
+  // El máximo se estima muestreando la derivada simbólica. Devuelve null si la
+  // derivada no existe o no está acotada en [a, b] (la cota no aplica).
+  function riemannErrorBound(expression, a, b, n, method) {
+    const order = method === "midpoint" ? 2 : 1;
+    let deriv = typeof expression === "object" && expression ? expression : parseExpression(expression);
+    for (let k = 0; k < order; k++) {
+      deriv = differentiate(deriv);
+      if (!deriv) return null;
+      deriv = simplify(deriv);
+    }
+    const fn = compile(deriv);
+    const lo = Math.min(a, b);
+    const hi = Math.max(a, b);
+    const samples = 2000;
+    let max = 0;
+    for (let i = 0; i <= samples; i++) {
+      const y = fn(lo + (hi - lo) * i / samples);
+      if (!Number.isFinite(y)) return null;
+      max = Math.max(max, Math.abs(y));
+    }
+    const width = hi - lo;
+    const bound = order === 1 ? max * width * width / (2 * n) : max * width ** 3 / (24 * n * n);
+    return { order, max, bound, derivative: deriv };
+  }
+
   // ── Sumas de Riemann ───────────────────────────────────────────────────────
 
   function riemann(fn, a, b, n, method) {
@@ -2617,6 +2645,7 @@ const IntegralCore = (() => {
     integralStatusMessage,
     analyzeIntegral,
     signedAreas,
+    riemannErrorBound,
     evaluateBound,
     evaluateAntiderivative,
     verifyAntiderivative,
@@ -2639,6 +2668,7 @@ const {
   approximateFraction, fractionApproxText, fractionValueText, piMultipleText,
   numberExpr, positiveNumberExpr, valueTex, displayExpr, methodLabel, clampN,
   riemann, integrateNumeric, integralStatusMessage, analyzeIntegral, signedAreas,
+  riemannErrorBound,
   evaluateBound, evaluateAntiderivative, decomposePartial, integrateSimple,
   integrationRuleName, formulaForRule, solveIntegral, polygonYIntervalsAtX,
   polygonArea, polygonSelfIntersects, parseImportedText

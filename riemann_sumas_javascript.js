@@ -29,121 +29,6 @@ const A4 = {
 let activeMathInput = null;
 
 
-const GAME_BANKS = {
-  integrals: {
-    label: "Integrales",
-    prompt: "Elige el método que resuelve la integral.",
-    options: [
-      "Integración inmediata",
-      "Fracciones parciales",
-      "Cambio de variable",
-      "Integración por partes"
-    ],
-    items: [
-      {
-        tex: "\\int x^2\\,dx",
-        linear: "integral x^2 dx",
-        answer: "Integración inmediata",
-        result: "1/3*x^3 + C",
-        fraction: "1/3",
-        why: "Regla de potencia: integral x^n dx = x^(n+1)/(n+1) + C."
-      },
-      {
-        tex: "\\int \\ln(x)\\,dx",
-        linear: "integral ln(x) dx",
-        answer: "Integración por partes",
-        result: "x*ln(abs(x)) - x + C",
-        fraction: "",
-        why: "Usa partes con u = ln(x) y dv = dx."
-      },
-      {
-        tex: "\\int \\frac{x+5}{x^2+3x+2}\\,dx",
-        linear: "integral (x + 5)/(x^2 + 3*x + 2) dx",
-        answer: "Fracciones parciales",
-        result: "4*ln(abs(x + 1)) - 3*ln(abs(x + 2)) + C",
-        fraction: "",
-        why: "El denominador factoriza como (x + 1)*(x + 2)."
-      },
-      {
-        tex: "\\int 2x\\cos(x^2)\\,dx",
-        linear: "integral 2*x*cos(x^2) dx",
-        answer: "Cambio de variable",
-        result: "sin(x^2) + C",
-        fraction: "",
-        why: "Toma u = x^2, entonces du = 2*x dx."
-      },
-      {
-        tex: "\\int e^x\\,dx",
-        linear: "integral exp(x) dx",
-        answer: "Integración inmediata",
-        result: "exp(x) + C",
-        fraction: "",
-        why: "La exponencial se integra directamente."
-      }
-    ]
-  },
-  derivatives: {
-    label: "Derivadas",
-    prompt: "Elige la regla de derivación.",
-    options: [
-      "Potencia",
-      "Producto",
-      "Cociente",
-      "Cadena"
-    ],
-    items: [
-      {
-        tex: "\\frac{d}{dx}x^5",
-        linear: "d/dx x^5",
-        answer: "Potencia",
-        result: "5*x^4",
-        fraction: "",
-        why: "Regla de potencia: d/dx x^n = n*x^(n-1)."
-      },
-      {
-        tex: "\\frac{d}{dx}\\left(x^2\\sin(x)\\right)",
-        linear: "d/dx (x^2*sin(x))",
-        answer: "Producto",
-        result: "2*x*sin(x) + x^2*cos(x)",
-        fraction: "",
-        why: "Hay producto de x^2 por sin(x)."
-      },
-      {
-        tex: "\\frac{d}{dx}\\left(\\frac{x+1}{x-1}\\right)",
-        linear: "d/dx ((x + 1)/(x - 1))",
-        answer: "Cociente",
-        result: "-2/(x - 1)^2",
-        fraction: "-2/(x - 1)^2",
-        why: "Usa (u/v)' = (u'*v - u*v')/v^2."
-      },
-      {
-        tex: "\\frac{d}{dx}\\sin(x^2)",
-        linear: "d/dx sin(x^2)",
-        answer: "Cadena",
-        result: "2*x*cos(x^2)",
-        fraction: "",
-        why: "Función externa sin(u) con u = x^2."
-      },
-      {
-        tex: "\\frac{d}{dx}\\sqrt{x+1}",
-        linear: "d/dx sqrt(x + 1)",
-        answer: "Cadena",
-        result: "1/(2*sqrt(x + 1))",
-        fraction: "1/(2*sqrt(x + 1))",
-        why: "Raíz de una función interna."
-      }
-    ]
-  }
-};
-
-const GAME_STATE = {
-  mode: "integrals",
-  index: 0,
-  score: 0,
-  answered: 0,
-  locked: false
-};
-
 // Marca un campo como inválido junto al control (validación en línea).
 function markField(id, message = "") {
   const el = $(id);
@@ -256,86 +141,245 @@ function animateSteps(selector) {
   gsap.fromTo(cards, { opacity: 0, y: 6 }, { opacity: 1, y: 0, duration: 0.22, stagger: 0.03, ease: "power3.out", clearProps: "transform" });
 }
 
-function currentGameBank() {
-  return GAME_BANKS[GAME_STATE.mode] || GAME_BANKS.integrals;
+// Juegos: rondas generadas por games.js (YosGames). El récord de racha se
+// guarda por juego en el navegador, si está disponible.
+const GAME_STATE = {
+  mode: "methods",
+  round: [],
+  index: 0,
+  score: 0,
+  streak: 0,
+  best: 0,
+  results: [],
+  locked: false
+};
+
+function gameBestKey(mode) {
+  return `yos-sphere:best:${mode}`;
 }
 
-function currentGameItem() {
-  const bank = currentGameBank();
-  return bank.items[GAME_STATE.index % bank.items.length];
+function loadGameBest(mode) {
+  try {
+    return Number(localStorage.getItem(gameBestKey(mode))) || 0;
+  } catch {
+    return 0;
+  }
 }
 
-
-function renderGame() {
-  if (!$("gameExpression")) return;
-  const bank = currentGameBank();
-  const item = currentGameItem();
-  $("gameKind").textContent = bank.label;
-  $("gamePrompt").textContent = bank.prompt;
-  renderMath($("gameExpression"), item.tex, false);
-  $("gameScore").textContent = `${GAME_STATE.score}/${GAME_STATE.answered}`;
-  if (!GAME_STATE.locked) $("gameFeedbackText").textContent = "Toca la burbuja correcta.";
-
-  document.querySelectorAll(".game-tab").forEach(tab => {
-    tab.classList.toggle("is-active", tab.dataset.game === GAME_STATE.mode);
-  });
-
-  const arena = $("bubbleArena");
-  arena.innerHTML = "";
-  bank.options.forEach((option, index) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "bubble-option";
-    button.style.setProperty("--bubble-delay", `${index * 45}ms`);
-    button.textContent = option;
-    button.addEventListener("click", () => answerGame(option));
-    arena.appendChild(button);
-  });
+function saveGameBest(mode, value) {
+  try {
+    localStorage.setItem(gameBestKey(mode), String(value));
+  } catch {
+    // Sin almacenamiento (modo privado): el récord dura solo esta sesión.
+  }
 }
 
-function setGameMode(mode) {
-  GAME_STATE.mode = GAME_BANKS[mode] ? mode : "integrals";
+function currentGameQuestion() {
+  return GAME_STATE.round[GAME_STATE.index];
+}
+
+function startGameRound(mode = GAME_STATE.mode) {
+  GAME_STATE.mode = YosGames.MODES[mode] ? mode : "methods";
+  GAME_STATE.round = YosGames.makeRound(GAME_STATE.mode);
   GAME_STATE.index = 0;
   GAME_STATE.score = 0;
-  GAME_STATE.answered = 0;
+  GAME_STATE.streak = 0;
+  GAME_STATE.best = loadGameBest(GAME_STATE.mode);
+  GAME_STATE.results = [];
   GAME_STATE.locked = false;
   renderGame();
 }
 
-function answerGame(option) {
-  if (GAME_STATE.locked) return;
-  const item = currentGameItem();
-  const correct = option === item.answer;
+// Dibujo pequeño de la región: curva, área sombreada y ejes.
+function gameAreaSVG({ expr, a, b }) {
+  const fn = compile(expr);
+  const pad = (b - a) * 0.18;
+  const left = a - pad;
+  const right = b + pad;
+  const W = 320;
+  const H = 150;
+  const samples = [];
+  let top = 0;
+  for (let i = 0; i <= 120; i++) {
+    const x = left + (right - left) * i / 120;
+    const y = fn(x);
+    samples.push([x, Number.isFinite(y) ? y : NaN]);
+    if (x >= a && x <= b && Number.isFinite(y)) top = Math.max(top, y);
+  }
+  top = top * 1.18 || 1;
+  const sx = x => 12 + (x - left) / (right - left) * (W - 24);
+  const sy = y => H - 18 - Math.max(-0.1 * top, Math.min(y, top * 1.3)) / top * (H - 34);
+  const curve = samples.filter(([, y]) => Number.isFinite(y))
+    .map(([x, y], i) => `${i ? "L" : "M"}${sx(x).toFixed(1)} ${sy(y).toFixed(1)}`).join(" ");
+  const inside = samples.filter(([x, y]) => x >= a && x <= b && Number.isFinite(y));
+  const ya = fn(a);
+  const yb = fn(b);
+  const pts = [[a, Number.isFinite(ya) ? ya : 0], ...inside, [b, Number.isFinite(yb) ? yb : 0]];
+  const region = `M${sx(a).toFixed(1)} ${sy(0).toFixed(1)} ` +
+    pts.map(([x, y]) => `L${sx(x).toFixed(1)} ${sy(y).toFixed(1)}`).join(" ") +
+    ` L${sx(b).toFixed(1)} ${sy(0).toFixed(1)} Z`;
+  const yAxis = left < 0 && right > 0 ? `<line class="ga-axis" x1="${sx(0).toFixed(1)}" y1="8" x2="${sx(0).toFixed(1)}" y2="${H - 10}"/>` : "";
+  return `
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Área bajo f(x) entre ${fmt(a)} y ${fmt(b)}">
+      <path class="ga-region" d="${region}"/>
+      <line class="ga-axis" x1="6" y1="${sy(0).toFixed(1)}" x2="${W - 6}" y2="${sy(0).toFixed(1)}"/>
+      ${yAxis}
+      <line class="ga-bound" x1="${sx(a).toFixed(1)}" y1="${sy(0).toFixed(1)}" x2="${sx(a).toFixed(1)}" y2="${sy(Number.isFinite(ya) ? ya : 0).toFixed(1)}"/>
+      <line class="ga-bound" x1="${sx(b).toFixed(1)}" y1="${sy(0).toFixed(1)}" x2="${sx(b).toFixed(1)}" y2="${sy(Number.isFinite(yb) ? yb : 0).toFixed(1)}"/>
+      <path class="ga-curve" d="${curve}"/>
+      <text class="ga-label" x="${sx(a).toFixed(1)}" y="${H - 2}">${fmt(a)}</text>
+      <text class="ga-label" x="${sx(b).toFixed(1)}" y="${H - 2}">${fmt(b)}</text>
+    </svg>`;
+}
+
+function renderGameProgress() {
+  const list = $("gameProgress");
+  if (!list) return;
+  list.innerHTML = GAME_STATE.round.map((_, i) => {
+    const result = GAME_STATE.results[i];
+    const cls = result === true ? "is-right" : result === false ? "is-miss" : i === GAME_STATE.index ? "is-current" : "";
+    return `<li class="${cls}"><span class="sr-only">Pregunta ${i + 1}</span></li>`;
+  }).join("");
+}
+
+function renderGameStats() {
+  $("gameScore").textContent = GAME_STATE.score;
+  $("gameStreak").textContent = GAME_STATE.streak;
+  $("gameBest").textContent = GAME_STATE.best;
+}
+
+function renderGame() {
+  if (!$("gameExpression") || typeof YosGames === "undefined") return;
+  if (!GAME_STATE.round.length) {
+    startGameRound();
+    return;
+  }
+  document.querySelectorAll(".game-tab").forEach(tab => {
+    const active = tab.dataset.game === GAME_STATE.mode;
+    tab.classList.toggle("is-active", active);
+    tab.setAttribute("aria-selected", String(active));
+  });
+  renderGameProgress();
+  renderGameStats();
+
+  const finished = GAME_STATE.index >= GAME_STATE.round.length;
+  $("gamePanel").hidden = finished;
+  $("gameSummary").hidden = !finished;
+  if (finished) {
+    renderGameSummary();
+    return;
+  }
+
+  const question = currentGameQuestion();
+  $("gameKind").textContent = `${question.kind} · ${GAME_STATE.index + 1}/${GAME_STATE.round.length}`;
+  $("gamePrompt").textContent = question.prompt;
+  renderMath($("gameExpression"), question.questionTex, false);
+  const art = $("gameArt");
+  art.hidden = !question.art;
+  art.closest(".game-question").classList.toggle("has-art", Boolean(question.art));
+  art.innerHTML = question.art ? gameAreaSVG(question.art) : "";
+
+  if (!GAME_STATE.locked) {
+    $("gameFeedbackText").textContent = "Elige una opción (teclas 1–4).";
+    $("gameExplain").innerHTML = "";
+    $("gameFeedback").className = "game-feedback";
+  }
+  $("gameNextBtn").disabled = !GAME_STATE.locked;
+  $("gameNextBtn").textContent = GAME_STATE.index === GAME_STATE.round.length - 1 ? "Ver resultado" : "Siguiente";
+
+  const arena = $("bubbleArena");
+  arena.innerHTML = "";
+  arena.classList.toggle("is-math", question.options.some(option => option.tex));
+  question.options.forEach((option, index) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "bubble-option";
+    button.dataset.id = option.id;
+    button.style.setProperty("--bubble-delay", `${index * 45}ms`);
+    const key = `<kbd aria-hidden="true">${index + 1}</kbd>`;
+    button.innerHTML = option.tex ? `${key}${mathToString(`\\displaystyle ${option.tex}`, false)}` : `${key}<span>${escapeHtml(option.text)}</span>`;
+    button.setAttribute("aria-label", `Opción ${index + 1}: ${option.text || option.id}`);
+    button.addEventListener("click", () => answerGame(option.id));
+    arena.appendChild(button);
+  });
+}
+
+function renderGameSummary() {
+  const total = GAME_STATE.round.length;
+  const ratio = total ? GAME_STATE.score / total : 0;
+  const circumference = 2 * Math.PI * 52;
+  const ring = $("gameRing");
+  ring.style.strokeDasharray = `${circumference}`;
+  ring.style.strokeDashoffset = `${circumference}`;
+  requestAnimationFrame(() => { ring.style.strokeDashoffset = `${circumference * (1 - ratio)}`; });
+  $("gameSummaryScore").textContent = `${GAME_STATE.score}/${total}`;
+  $("gameSummaryTitle").textContent = ratio === 1 ? "¡Ronda perfecta!" : ratio >= 0.7 ? "¡Muy bien!" : ratio >= 0.4 ? "Vas por buen camino" : "Sigue practicando";
+  $("gameSummaryText").textContent = `${YosGames.MODES[GAME_STATE.mode].title}: ${GAME_STATE.score} de ${total} aciertos. Tu mejor racha en este juego es ${GAME_STATE.best}.`;
+}
+
+function setGameMode(mode) {
+  if (mode === GAME_STATE.mode && GAME_STATE.round.length && GAME_STATE.index < GAME_STATE.round.length) return;
+  startGameRound(mode);
+}
+
+function answerGame(id) {
+  const question = currentGameQuestion();
+  if (GAME_STATE.locked || !question) return;
+  const correct = id === question.correctId;
   GAME_STATE.locked = true;
-  GAME_STATE.answered += 1;
-  if (correct) GAME_STATE.score += 1;
+  GAME_STATE.results[GAME_STATE.index] = correct;
+  if (correct) {
+    GAME_STATE.score += 1;
+    GAME_STATE.streak += 1;
+    if (GAME_STATE.streak > GAME_STATE.best) {
+      GAME_STATE.best = GAME_STATE.streak;
+      saveGameBest(GAME_STATE.mode, GAME_STATE.best);
+    }
+  } else {
+    GAME_STATE.streak = 0;
+  }
 
   document.querySelectorAll(".bubble-option").forEach(button => {
-    const isAnswer = button.textContent === item.answer;
-    const isChosen = button.textContent === option;
-    button.classList.toggle("is-correct", isAnswer);
-    button.classList.toggle("is-wrong", isChosen && !correct);
+    button.classList.toggle("is-correct", button.dataset.id === question.correctId);
+    button.classList.toggle("is-wrong", button.dataset.id === id && !correct);
     button.disabled = true;
   });
 
-  const fractionText = item.fraction ? ` Forma en fracción: ${item.fraction}.` : "";
-  $("gameScore").textContent = `${GAME_STATE.score}/${GAME_STATE.answered}`;
-  $("gameFeedbackText").textContent = `${correct ? "Correcto." : "No. Era: " + item.answer + "."} Resultado: ${item.result}.${fractionText} ${item.why}`;
+  const answer = question.options.find(option => option.id === question.correctId);
+  const answerText = answer.text || "la marcada en verde";
+  const streakText = correct && GAME_STATE.streak >= 3 ? ` Racha de ${GAME_STATE.streak}.` : "";
+  $("gameFeedback").className = `game-feedback ${correct ? "is-right" : "is-miss"}`;
+  $("gameFeedbackText").textContent = `${correct ? "¡Correcto!" : `No. La respuesta es ${answerText}.`}${streakText} ${question.why}`;
+  renderMath($("gameExplain"), question.explainTex, true);
+  renderGameProgress();
+  renderGameStats();
+  $("gameNextBtn").disabled = false;
+  $("gameNextBtn").focus({ preventScroll: true });
 }
 
 function nextGame() {
-  const bank = currentGameBank();
-  GAME_STATE.index = (GAME_STATE.index + 1) % bank.items.length;
+  if (!GAME_STATE.locked) return;
+  GAME_STATE.index += 1;
   GAME_STATE.locked = false;
   renderGame();
 }
 
 function resetGame() {
-  GAME_STATE.index = 0;
-  GAME_STATE.score = 0;
-  GAME_STATE.answered = 0;
-  GAME_STATE.locked = false;
-  renderGame();
+  startGameRound(GAME_STATE.mode);
+}
+
+function handleGameKey(event) {
+  if (document.body.dataset.section !== "games" || event.ctrlKey || event.metaKey || event.altKey) return;
+  if (event.target.closest?.("input, textarea, select")) return;
+  const buttons = [...document.querySelectorAll("#bubbleArena .bubble-option")];
+  const index = Number(event.key) - 1;
+  if (index >= 0 && index < buttons.length && !GAME_STATE.locked) {
+    event.preventDefault();
+    buttons[index].click();
+  } else if (event.key === "Enter" && GAME_STATE.locked && event.target.tagName !== "BUTTON") {
+    event.preventDefault();
+    nextGame();
+  }
 }
 
 // Muestrea la curva cortando el trazo en los polos y calcula un rango vertical
@@ -671,7 +715,7 @@ function moveNavIndicator() {
 // Brillo suave que sigue al puntero sobre las tarjetas.
 function bindGlowCards() {
   if (typeof matchMedia === "function" && !matchMedia("(hover: hover)").matches) return;
-  document.querySelectorAll(".graph-shell, .stat, .result-box, .game-question, .scard, .formula-row").forEach(card => card.classList.add("glow-card"));
+  document.querySelectorAll(".graph-shell, .stat, .result-box, .game-question, .scard").forEach(card => card.classList.add("glow-card"));
   document.addEventListener("pointermove", event => {
     const card = event.target.closest?.(".glow-card");
     if (!card) return;
@@ -833,6 +877,7 @@ function updateAll() {
     drawGraph(input);
     updateTable();
     updateSteps(input);
+    updateFormulas(input);
 
     const warning = riemannWarning(input);
     const status = $("infinityInput").checked
@@ -852,6 +897,11 @@ function boundTex(value) {
   return fmt(value);
 }
 
+// Resalta el valor final de un resultado con el color de acento.
+function highlightTex(tex) {
+  return `\\textcolor{#2563eb}{${tex}}`;
+}
+
 function definiteResultTex(solution) {
   const d = solution.definite;
   const integral = `\\int_{${boundTex(d.a)}}^{${boundTex(d.b)}}\\!\\left(${exprToLatex(solution.expr)}\\right)dx`;
@@ -860,10 +910,13 @@ function definiteResultTex(solution) {
   if (d.method === "symbolic") {
     const exact = `\\left[${exprToLatex(solution.anti)}\\right]_{${boundTex(d.a)}}^{${boundTex(d.b)}}`;
     const rounded = Math.round(d.value);
-    const exactValue = fractionValueText(d.value) ? valueTex(d.value) : Math.abs(d.value - rounded) < 1e-10 ? String(rounded) : "";
-    return `${integral}=${exact}${exactValue ? `=${exactValue}` : ""}\\approx ${fmt(d.value, 8)}`;
+    const piForm = piMultipleText(d.value);
+    const exactValue = fractionValueText(d.value) ? valueTex(d.value)
+      : Math.abs(d.value - rounded) < 1e-10 ? String(rounded)
+      : piForm ? exprToLatex(piForm) : "";
+    return `${integral}=${exact}${exactValue ? `=${highlightTex(exactValue)}` : ""}\\approx ${highlightTex(fmt(d.value, 8))}`;
   }
-  return `${integral}\\approx ${fmt(d.value, 8)}`;
+  return `${integral}\\approx ${highlightTex(fmt(d.value, 8))}`;
 }
 
 function renderSolverSummary(solution) {
@@ -932,6 +985,8 @@ function integralSolutionSteps(solution) {
 
 function showIntegralError(message, fieldId) {
   const result = $("integralResult");
+  lastIntegralText = "";
+  $("integralCopyBtn").disabled = true;
   result.textContent = `Error: ${message}`;
   result.classList.add("is-error");
   markField(fieldId, message);
@@ -977,13 +1032,15 @@ function solveIntegralAdvanced() {
   }
 
   renderSolverSummary(solution);
+  lastIntegralText = solutionText(solution);
+  $("integralCopyBtn").disabled = !lastIntegralText;
   if (solution.definite) {
     renderMath(result, definiteResultTex(solution), true);
     result.classList.remove("is-fresh");
     void result.offsetWidth;
     result.classList.add("is-fresh");
   } else if (solution.anti) {
-    renderMath(result, `\\int\\!\\left(${exprToLatex(solution.expr)}\\right)dx=${exprToLatex(solution.anti)}+C`, true);
+    renderMath(result, `\\int\\!\\left(${exprToLatex(solution.expr)}\\right)dx=${highlightTex(`${exprToLatex(solution.anti)}+C`)}`, true);
   } else {
     result.textContent = "Sin primitiva elemental. Añade límites a y b para calcular el valor numérico.";
   }
@@ -991,6 +1048,90 @@ function solveIntegralAdvanced() {
   animateSteps("#integralSteps");
 }
 
+
+// Tabla de integrales: cada fila tiene un ejemplo que se resuelve al tocar «Probar».
+const INTEGRAL_TABLE = [
+  { name: "Potencia", tex: "\\int x^{n}\\,dx=\\frac{x^{n+1}}{n+1}+C,\\quad n\\neq -1", expr: "x^3" },
+  { name: "Logaritmo", tex: "\\int \\frac{1}{x}\\,dx=\\ln|x|+C", expr: "1/x", a: "1", b: "e" },
+  { name: "Exponencial", tex: "\\int e^{x}\\,dx=e^{x}+C", expr: "exp(x)" },
+  { name: "Base a", tex: "\\int a^{x}\\,dx=\\frac{a^{x}}{\\ln a}+C", expr: "2^x" },
+  { name: "Seno", tex: "\\int \\sin x\\,dx=-\\cos x+C", expr: "sin(x)", a: "0", b: "pi" },
+  { name: "Coseno", tex: "\\int \\cos x\\,dx=\\sin x+C", expr: "cos(x)" },
+  { name: "Secante²", tex: "\\int \\sec^{2}x\\,dx=\\tan x+C", expr: "sec(x)^2" },
+  { name: "Arcotangente", tex: "\\int \\frac{dx}{1+x^{2}}=\\arctan x+C", expr: "1/(1+x^2)", a: "-inf", b: "inf" },
+  { name: "Arcoseno", tex: "\\int \\frac{dx}{\\sqrt{1-x^{2}}}=\\arcsin x+C", expr: "1/sqrt(1-x^2)", a: "0", b: "1/2" },
+  { name: "Cambio lineal", tex: "\\int f(ax+b)\\,dx=\\frac{1}{a}F(ax+b)+C", expr: "cos(3x+1)" },
+  { name: "Sustitución", tex: "\\int f\\big(g(x)\\big)\\,g'(x)\\,dx=F\\big(g(x)\\big)+C", expr: "2x*cos(x^2)" },
+  { name: "Por partes", tex: "\\int u\\,dv=uv-\\int v\\,du", expr: "x*exp(x)" },
+  { name: "Fracciones parciales", tex: "\\int \\frac{A}{x-r}\\,dx=A\\ln|x-r|+C", expr: "(x+5)/(x^2+3x+2)" },
+  { name: "Gaussiana", tex: "\\int_{-\\infty}^{\\infty}e^{-x^{2}}\\,dx=\\sqrt{\\pi}", expr: "exp(-x^2)", a: "-inf", b: "inf" }
+];
+
+function renderIntegralTable() {
+  const host = $("integralTableRows");
+  if (!host) return;
+  host.innerHTML = INTEGRAL_TABLE.map((row, index) => `
+    <div class="it-row">
+      <span class="it-name">${row.name}</span>
+      <div class="it-math">${mathToString(`\\displaystyle ${row.tex}`, false)}</div>
+      <button class="it-try" type="button" data-row="${index}" aria-label="Probar ${row.name}">Probar</button>
+    </div>`).join("");
+}
+
+function tryIntegralTableRow(index) {
+  const row = INTEGRAL_TABLE[index];
+  if (!row) return;
+  $("integralExpr").value = row.expr;
+  $("integralA").value = row.a || "";
+  $("integralB").value = row.b || "";
+  solveIntegralAdvanced();
+  $("integralPreview").scrollIntoView({ behavior: REDUCED_MOTION ? "auto" : "smooth", block: "start" });
+}
+
+// Texto plano del último resultado, para copiarlo.
+let lastIntegralText = "";
+
+function solutionText(solution) {
+  const d = solution.definite;
+  if (d && Number.isFinite(d.value)) {
+    const exact = fractionValueText(d.value) || piMultipleText(d.value);
+    return exact ? `${exact} ≈ ${fmt(d.value, 12)}` : fmt(d.value, 12);
+  }
+  if (d) return integralLabel(d.value, d.status);
+  return solution.anti ? `${linearExpr(solution.anti)} + C` : "";
+}
+
+function copyIntegralResult() {
+  const button = $("integralCopyBtn");
+  if (!lastIntegralText) return;
+  const done = ok => {
+    button.textContent = ok ? "¡Copiado!" : "No se pudo copiar";
+    clearTimeout(button._reset);
+    button._reset = setTimeout(() => { button.textContent = "Copiar resultado"; }, 1600);
+  };
+  const fallback = () => {
+    const area = document.createElement("textarea");
+    area.value = lastIntegralText;
+    area.setAttribute("readonly", "");
+    area.style.position = "fixed";
+    area.style.opacity = "0";
+    document.body.appendChild(area);
+    area.select();
+    let ok = false;
+    try {
+      ok = document.execCommand("copy");
+    } catch {
+      ok = false;
+    }
+    area.remove();
+    done(ok);
+  };
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(lastIntegralText).then(() => done(true), fallback);
+  } else {
+    fallback();
+  }
+}
 
 function cycleExample(id, examples) {
   const current = $(id).value;
@@ -1033,6 +1174,7 @@ function switchTab(name) {
   } else {
     setSectionActive("riemann");
     setWorkspaceSection("riemann");
+    if (name === "pFormulas" && STATE.input) updateFormulas(STATE.input);
   }
   if (name === "pResolve") animateSteps("#stepsTimeline");
 }
@@ -1149,14 +1291,129 @@ function goHome() {
   }
 }
 
-function initFormulas() {
-  renderMath($("f1"), "\\Delta x=\\frac{b-a}{n}");
-  renderMath($("f2"), "x_i=a+i\\cdot\\Delta x");
-  renderMath($("f3"), "x_i^*=a+(i-1)\\,\\Delta x");
-  renderMath($("f4"), "x_i^*=a+i\\,\\Delta x");
-  renderMath($("f5"), "x_i^*=a+\\left(i-\\tfrac{1}{2}\\right)\\Delta x");
-  renderMath($("f6"), "S_n=\\sum_{i=1}^{n}f(x_i^*)\\,\\Delta x");
-  renderMath($("f7"), "\\int_a^b f(x)\\,dx=\\lim_{n\\to\\infty}S_n");
+// Fórmulas del panel: cada tarjeta muestra la fórmula general y, debajo, la
+// misma fórmula con los valores actuales (a, b, n, método) ya sustituidos.
+const FORMULA_ANTI_CACHE = { expr: null, anti: null };
+
+function cachedAntiderivative(expr) {
+  if (FORMULA_ANTI_CACHE.expr !== expr) {
+    FORMULA_ANTI_CACHE.expr = expr;
+    try {
+      FORMULA_ANTI_CACHE.anti = solveIntegral(expr, "", "").anti || null;
+    } catch {
+      FORMULA_ANTI_CACHE.anti = null;
+    }
+  }
+  return FORMULA_ANTI_CACHE.anti;
+}
+
+function texNumber(value, digits = 5) {
+  const text = fmt(value, digits);
+  return value < 0 ? `(${text})` : text;
+}
+
+function formulaCard({ title, hint = "", generic, live = "", active = false, note = "" }) {
+  return `
+    <article class="formula-card${active ? " is-active" : ""}">
+      <header><strong>${title}</strong>${hint ? `<span>${hint}</span>` : ""}</header>
+      <div class="fc-generic">${mathToString(generic, true)}</div>
+      ${live ? `<div class="fc-live">${mathToString(live, true)}</div>` : ""}
+      ${note ? `<p class="fc-note">${note}</p>` : ""}
+    </article>`;
+}
+
+function updateFormulas(input) {
+  const host = $("formulaCards");
+  if (!host || !STATE.data) return;
+  // Solo se dibuja con el panel visible; switchTab lo actualiza al abrirlo.
+  if (!$("pFormulas").classList.contains("show")) return;
+  const infinite = $("infinityInput").checked;
+  const n = infinite ? "n" : String(input.manualN);
+  const a = texNumber(input.a);
+  const b = fmt(input.b);
+  const dx = STATE.data.dx;
+  const rects = STATE.data.rects;
+  const f = `f(x)=${exprToLatex(input.expr)}`;
+
+  const samples = [
+    { method: "left", name: "Izquierda", rule: "x_i^*=a+(i-1)\\,\\Delta x", first: input.a },
+    { method: "right", name: "Derecha", rule: "x_i^*=a+i\\,\\Delta x", first: input.a + dx },
+    { method: "midpoint", name: "Punto medio", rule: "x_i^*=a+\\left(i-\\tfrac{1}{2}\\right)\\Delta x", first: input.a + dx / 2 }
+  ];
+  const sampleRows = samples.map(s => `
+      <div class="fc-sample${s.method === input.method ? " is-active" : ""}">
+        <span>${s.name}${s.method === input.method ? "<small>en uso</small>" : ""}</span>
+        ${mathToString(s.rule, false)}
+        ${s.method === input.method && !infinite ? `<em>${mathToString(`x_1^*=${fmt(s.first)}`, false)}</em>` : ""}
+      </div>`).join("");
+
+  const sumLive = infinite
+    ? `S_n\\xrightarrow[n\\to\\infty]{}${integralTex()}`
+    : `S_{${n}}=\\sum_{i=1}^{${n}}f(x_i^*)\\cdot ${fmt(dx)}\\approx ${fmt(STATE.data.sum)}`;
+  const firstTerms = !infinite && rects.length
+    ? rects.slice(0, 2).map(r => `${texNumber(r.y, 4)}`).join("+") + (rects.length > 2 ? "+\\cdots" : "")
+    : "";
+
+  const cards = [
+    formulaCard({ title: "Función e intervalo", generic: f, live: `[a,b]=[${fmt(input.a)},\\,${b}]` }),
+    formulaCard({
+      title: "Ancho de cada rectángulo",
+      generic: "\\Delta x=\\frac{b-a}{n}",
+      live: infinite ? "\\Delta x\\to 0" : `\\Delta x=\\frac{${b}-${a}}{${n}}=${fmt(dx)}`
+    }),
+    `<article class="formula-card">
+      <header><strong>Punto de muestra</strong><span>${methodLabel(input.method)}</span></header>
+      <div class="fc-samples">${sampleRows}</div>
+    </article>`,
+    formulaCard({
+      title: "Suma de Riemann",
+      generic: "S_n=\\sum_{i=1}^{n}f(x_i^*)\\,\\Delta x",
+      live: sumLive,
+      note: firstTerms ? `Primeras alturas: ${mathToString(`f(x_1^*)+f(x_2^*)+\\cdots=${firstTerms}`, false)}` : ""
+    }),
+    formulaCard({
+      title: "Integral definida",
+      generic: "\\int_a^b f(x)\\,dx=\\lim_{n\\to\\infty}S_n",
+      live: `\\int_{${fmt(input.a)}}^{${b}}\\left(${exprToLatex(input.expr)}\\right)dx=${integralTex()}`,
+      active: true
+    })
+  ];
+
+  const anti = integralHasValue() ? cachedAntiderivative(input.expr) : null;
+  if (anti) {
+    cards.push(formulaCard({
+      title: "Teorema fundamental",
+      hint: "regla de Barrow",
+      generic: "\\int_a^b f(x)\\,dx=F(b)-F(a),\\quad F'=f",
+      live: `F(x)=${exprToLatex(anti)}`
+    }));
+  }
+
+  if (integralHasValue() && !infinite) {
+    const bound = riemannErrorBound(input.expr, input.a, input.b, input.manualN, input.method);
+    const error = Math.abs(STATE.data.sum - STATE.exact);
+    const midpoint = input.method === "midpoint";
+    const generic = midpoint
+      ? "|E_n|\\le\\frac{M_2\\,(b-a)^3}{24\\,n^2},\\quad M_2=\\max|f''|"
+      : "|E_n|\\le\\frac{M_1\\,(b-a)^2}{2\\,n},\\quad M_1=\\max|f'|";
+    const width = Math.abs(input.b - input.a);
+    const live = bound
+      ? (midpoint
+        ? `|E_{${n}}|\\le\\frac{${fmt(bound.max, 4)}\\cdot ${fmt(width)}^3}{24\\cdot ${n}^2}=${fmt(bound.bound)}`
+        : `|E_{${n}}|\\le\\frac{${fmt(bound.max, 4)}\\cdot ${fmt(width)}^2}{2\\cdot ${n}}=${fmt(bound.bound)}`)
+      : "";
+    cards.push(formulaCard({
+      title: "Cota del error",
+      hint: midpoint ? "orden 1/n²" : "orden 1/n",
+      generic,
+      live,
+      note: bound
+        ? `Error real: ${mathToString(`|S_{${n}}-I|=${fmt(error)}`, false)}${error <= bound.bound * (1 + 1e-9) + 1e-12 ? " — dentro de la cota." : "."}`
+        : `La cota no aplica: ${midpoint ? "f″" : "f′"} no está acotada (o no existe) en el intervalo.`
+    }));
+  }
+
+  host.innerHTML = cards.join("");
 }
 
 function initIcons() {
@@ -1651,6 +1908,13 @@ function bindEvents() {
   });
   $("gameNextBtn").addEventListener("click", nextGame);
   $("gameResetBtn").addEventListener("click", resetGame);
+  $("gameAgainBtn").addEventListener("click", resetGame);
+  $("integralCopyBtn").addEventListener("click", copyIntegralResult);
+  $("integralTableRows").addEventListener("click", event => {
+    const button = event.target.closest(".it-try");
+    if (button) tryIntegralTableRow(Number(button.dataset.row));
+  });
+  document.addEventListener("keydown", handleGameKey);
 
 
   window.addEventListener("resize", () => {
@@ -1663,8 +1927,8 @@ function bindEvents() {
 function init() {
   bindEvents();
   initIcons();
-  initFormulas();
   renderA4Canvas();
+  renderIntegralTable();
   switchTab("pTabla");
   updateAll();
   updateMathPreviews();

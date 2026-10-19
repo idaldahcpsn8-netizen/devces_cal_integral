@@ -42,7 +42,7 @@ class HandlerTests(unittest.TestCase):
         self.assertEqual(headers.get("Cache-Control"), "no-store")
 
     def test_serves_scripts_and_vendor_files(self):
-        for path in ["/integral_core.js", "/riemann_sumas_javascript.js", "/vendor/katex/katex.min.js"]:
+        for path in ["/integral_core.js", "/games.js", "/riemann_sumas_javascript.js", "/vendor/katex/katex.min.js"]:
             status, _, _ = self.request("GET", path)
             self.assertEqual(status, 200, path)
 
