@@ -376,7 +376,7 @@ function animateSteps(selector) {
   if (typeof gsap === "undefined" || REDUCED_MOTION) return;
   const cards = document.querySelectorAll(`${selector} .scard`);
   if (!cards.length) return;
-  gsap.fromTo(cards, { opacity: 0, x: -12 }, { opacity: 1, x: 0, duration: 0.24, stagger: 0.04, ease: "power2.out" });
+  gsap.fromTo(cards, { opacity: 0, y: 6 }, { opacity: 1, y: 0, duration: 0.22, stagger: 0.03, ease: "power3.out", clearProps: "transform" });
 }
 
 function currentGameBank() {
@@ -503,8 +503,32 @@ function curveSamples(fn, left, right, singularities = []) {
   return { x, y, range: outliers ? [lo - 0.35 * span, hi + 0.35 * span] : null };
 }
 
+// Colores de la gráfica tomados de los tokens del tema (claro u oscuro).
+function themeColors() {
+  const css = getComputedStyle(document.documentElement);
+  const token = (name, fallback) => css.getPropertyValue(name).trim() || fallback;
+  return {
+    surface: token("--surface", "#ffffff"),
+    text: token("--text", "#171717"),
+    muted: token("--muted", "#6b6b6b"),
+    line: token("--line", "rgba(0,0,0,.08)"),
+    line2: token("--line-2", "rgba(0,0,0,.14)"),
+    faint: token("--faint", "#a3a3a3"),
+    blue: token("--blue", "#0a6cde"),
+    green: token("--green-soft", "rgba(23,128,61,.16)"),
+    red: token("--red-soft", "rgba(217,45,52,.08)"),
+    redStrong: token("--red", "#d92d34"),
+    greenStrong: token("--green", "#17803d"),
+    orange: token("--orange", "#e8890c"),
+    violet: token("--violet", "#6e3fd8"),
+    sans: token("--sans", "system-ui, sans-serif"),
+    mono: token("--mono", "monospace")
+  };
+}
+
 function drawGraph(input) {
   if (typeof Plotly === "undefined" || !STATE.fn || !STATE.data) return;
+  const colors = themeColors();
 
   const a = input.a;
   const b = input.b;
@@ -527,14 +551,14 @@ function drawGraph(input) {
       bx.push((r.x0 + r.x1) / 2);
       by.push(r.y);
       bw.push(Math.abs(r.x1 - r.x0) * 0.96);
-      bc.push(r.y >= 0 ? "rgba(32,164,100,.32)" : "rgba(220,38,38,.26)");
+      bc.push(r.y >= 0 ? colors.green : colors.red);
     }
     traces.push({
       type: "bar",
       x: bx,
       y: by,
       width: bw,
-      marker: { color: bc, line: { color: "rgba(31,41,55,.22)", width: 1 } },
+      marker: { color: bc, line: { color: colors.line2, width: 1 } },
       hovertemplate: "x: %{x:.4f}<br>f(x): %{y:.4f}<extra>Rectángulo</extra>",
       showlegend: false
     });
@@ -554,8 +578,8 @@ function drawGraph(input) {
       nx.push(xv);
       ny.push(yv < 0 ? yv : 0);
     }
-    traces.push({ x: px, y: py, type: "scatter", mode: "none", fill: "tozeroy", fillcolor: "rgba(32,164,100,.22)", showlegend: false, hoverinfo: "skip" });
-    traces.push({ x: nx, y: ny, type: "scatter", mode: "none", fill: "tozeroy", fillcolor: "rgba(220,38,38,.18)", showlegend: false, hoverinfo: "skip" });
+    traces.push({ x: px, y: py, type: "scatter", mode: "none", fill: "tozeroy", fillcolor: colors.green, showlegend: false, hoverinfo: "skip" });
+    traces.push({ x: nx, y: ny, type: "scatter", mode: "none", fill: "tozeroy", fillcolor: colors.red, showlegend: false, hoverinfo: "skip" });
   }
 
   traces.push({
@@ -563,7 +587,7 @@ function drawGraph(input) {
     y: curve.y,
     type: "scatter",
     mode: "lines",
-    line: { color: "#2f80ed", width: 3 },
+    line: { color: colors.blue, width: 2.5 },
     name: "f(x)",
     hovertemplate: "x: %{x:.4f}<br>f(x): %{y:.4f}<extra></extra>"
   });
@@ -581,45 +605,46 @@ function drawGraph(input) {
       y: sy,
       type: "scatter",
       mode: "markers",
-      marker: { color: "#f59e0b", size: 6, line: { color: "#ffffff", width: 1.5 } },
+      marker: { color: colors.orange, size: 6, line: { color: colors.surface, width: 1.5 } },
       hovertemplate: "x*: %{x:.4f}<br>f(x*): %{y:.4f}<extra>Muestra</extra>",
       showlegend: false
     });
   }
 
-  const gridColor = $("gridInput").checked ? "#e4e8ef" : "transparent";
+  const gridColor = $("gridInput").checked ? colors.line : "rgba(0,0,0,0)";
   const layout = {
-    paper_bgcolor: "#ffffff",
-    plot_bgcolor: "#ffffff",
-    font: { family: "Inter, system-ui, sans-serif", size: 11, color: "#64748b" },
+    paper_bgcolor: colors.surface,
+    plot_bgcolor: colors.surface,
+    font: { family: colors.sans, size: 11, color: colors.muted },
+    hoverlabel: { bgcolor: colors.surface, bordercolor: colors.line2, font: { family: colors.mono, color: colors.text } },
     margin: { l: 54, r: 20, t: 12, b: 42 },
     xaxis: {
       range: [viewLeft, viewRight],
       showline: true,
-      linecolor: "#aeb7c5",
+      linecolor: colors.line2,
       mirror: false,
       gridcolor: gridColor,
-      zerolinecolor: "#6b7280",
+      zerolinecolor: colors.faint,
       zerolinewidth: 1.3,
-      tickfont: { family: "JetBrains Mono, monospace", size: 11, color: "#64748b" }
+      tickfont: { family: colors.mono, size: 11, color: colors.muted }
     },
     yaxis: {
       ...(curve.range ? { range: curve.range } : {}),
       showline: true,
-      linecolor: "#aeb7c5",
+      linecolor: colors.line2,
       mirror: false,
       gridcolor: gridColor,
-      zerolinecolor: "#6b7280",
+      zerolinecolor: colors.faint,
       zerolinewidth: 1.3,
-      tickfont: { family: "JetBrains Mono, monospace", size: 11, color: "#64748b" }
+      tickfont: { family: colors.mono, size: 11, color: colors.muted }
     },
     shapes: [
-      { type: "line", x0: a, x1: a, y0: 0, y1: 1, yref: "paper", line: { color: "rgba(124,58,237,.55)", width: 1.5, dash: "dash" } },
-      { type: "line", x0: b, x1: b, y0: 0, y1: 1, yref: "paper", line: { color: "rgba(124,58,237,.55)", width: 1.5, dash: "dash" } }
+      { type: "line", x0: a, x1: a, y0: 0, y1: 1, yref: "paper", line: { color: colors.violet, width: 1, dash: "dot" } },
+      { type: "line", x0: b, x1: b, y0: 0, y1: 1, yref: "paper", line: { color: colors.violet, width: 1, dash: "dot" } }
     ],
     annotations: [
-      { x: a, y: 0, text: `a=${fmt(a, 2)}`, showarrow: false, yshift: -16, font: { size: 11, color: "#7c3aed", family: "JetBrains Mono" } },
-      { x: b, y: 0, text: `b=${fmt(b, 2)}`, showarrow: false, yshift: 16, font: { size: 11, color: "#7c3aed", family: "JetBrains Mono" } }
+      { x: a, y: 0, text: `a=${fmt(a, 2)}`, showarrow: false, yshift: -16, font: { size: 11, color: colors.violet, family: colors.mono } },
+      { x: b, y: 0, text: `b=${fmt(b, 2)}`, showarrow: false, yshift: 16, font: { size: 11, color: colors.violet, family: colors.mono } }
     ],
     hovermode: "x unified",
     dragmode: "pan",
@@ -755,9 +780,10 @@ function updateChrome(input) {
 }
 
 function syncMethodButtons(method) {
-  document.querySelectorAll(".seg-btn").forEach(btn => {
-    btn.classList.toggle("is-active", btn.dataset.method === method);
-  });
+  const buttons = [...document.querySelectorAll(".seg-btn")];
+  buttons.forEach(btn => btn.classList.toggle("is-active", btn.dataset.method === method));
+  const index = buttons.findIndex(btn => btn.dataset.method === method);
+  document.querySelector(".segmented")?.style.setProperty("--seg-index", String(Math.max(0, index)));
 }
 
 function setStatus(message, type = "") {
@@ -2276,6 +2302,14 @@ function bindEvents() {
     if (event.key === "Enter") sendSectionHelpMessage();
   });
 
+  const redrawForTheme = () => {
+    if (STATE.input) drawGraph(STATE.input);
+  };
+  if (typeof matchMedia === "function") matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", redrawForTheme);
+  if (typeof MutationObserver === "function") {
+    new MutationObserver(redrawForTheme).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  }
+
   window.addEventListener("resize", () => {
     if (STATE.input) drawGraph(STATE.input);
   });
@@ -2544,23 +2578,25 @@ function injectWelcomeModalStyles() {
   const style = document.createElement("style");
   style.id = "wm-styles";
   style.textContent = `
-.wm-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem}
-.wm-card{background:var(--surface,#1e2330);border:1px solid var(--border,rgba(255,255,255,.09));border-radius:1.1rem;padding:2rem;max-width:480px;width:100%;box-shadow:0 24px 64px rgba(0,0,0,.5);animation:wmIn .25s cubic-bezier(.34,1.56,.64,1)}
-@keyframes wmIn{from{opacity:0;transform:scale(.9) translateY(12px)}to{opacity:1;transform:none}}
-.wm-header{display:flex;gap:1rem;align-items:flex-start;margin-bottom:1.5rem}
-.wm-icon{font-size:2.2rem;line-height:1;color:var(--accent,#7c3aed)}
-.wm-header strong{display:block;font-size:1.05rem;color:var(--text,#f1f5f9)}
-.wm-header p{font-size:.82rem;color:var(--muted,#94a3b8);margin:.2rem 0 0}
-.wm-body{display:flex;flex-direction:column;gap:1rem}
-.wm-step{display:flex;gap:.9rem;align-items:flex-start}
-.wm-num{flex-shrink:0;width:1.6rem;height:1.6rem;border-radius:50%;background:var(--accent,#7c3aed);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.8rem}
-.wm-step b{display:block;font-size:.88rem;color:var(--text,#f1f5f9);margin-bottom:.2rem}
-.wm-step p,.wm-step a{font-size:.82rem;color:var(--muted,#94a3b8)}
-.wm-step a{color:var(--accent,#7c3aed);text-decoration:underline}
-.wm-input{width:100%;margin-top:.35rem;padding:.55rem .8rem;border-radius:.55rem;border:1px solid var(--border,rgba(255,255,255,.12));background:var(--surface2,#111827);color:var(--text,#f1f5f9);font-family:"JetBrains Mono",monospace;font-size:.85rem;outline:none}
-.wm-input:focus{border-color:var(--accent,#7c3aed)}
-.wm-status{font-size:.82rem;min-height:1.2em;font-weight:500;transition:color .2s}
-.wm-footer{display:flex;gap:.7rem;margin-top:1.5rem;flex-wrap:wrap}
+.wm-overlay{position:fixed;inset:0;background:var(--scrim);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;animation:wmFade .2s cubic-bezier(.23,1,.32,1) both}
+.wm-card{background:var(--surface);border-radius:16px;padding:24px;max-width:460px;width:100%;box-shadow:var(--shadow-pop);animation:wmIn .24s cubic-bezier(.23,1,.32,1) both}
+@keyframes wmFade{from{opacity:0}to{opacity:1}}
+@keyframes wmIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}
+.wm-header{display:flex;gap:12px;align-items:flex-start;margin-bottom:20px}
+.wm-icon{width:32px;height:32px;display:grid;place-items:center;flex:none;border-radius:8px;background:var(--primary);color:var(--on-primary);font:italic 500 19px/1 Georgia,serif}
+.wm-header strong{display:block;font-size:15px;font-weight:600;letter-spacing:-.015em;color:var(--text)}
+.wm-header p{font-size:13px;color:var(--muted);margin:.2rem 0 0}
+.wm-body{display:flex;flex-direction:column;gap:14px}
+.wm-step{display:flex;gap:12px;align-items:flex-start}
+.wm-num{flex-shrink:0;width:22px;height:22px;border-radius:50%;background:var(--surface-2);box-shadow:inset 0 0 0 1px var(--line-2);color:var(--text);display:flex;align-items:center;justify-content:center;font:500 11px/1 var(--mono)}
+.wm-step b{display:block;font-size:13px;font-weight:600;color:var(--text);margin-bottom:.2rem}
+.wm-step p,.wm-step a{font-size:13px;color:var(--muted)}
+.wm-step a{color:var(--blue);text-decoration:underline;text-underline-offset:2px}
+.wm-input{width:100%;margin-top:.35rem;padding:8px 10px;border-radius:8px;border:0;box-shadow:0 0 0 1px var(--line-2);background:var(--surface);color:var(--text);font:13px var(--mono);outline:none}
+.wm-input:focus{box-shadow:0 0 0 1px var(--blue),0 0 0 4px var(--blue-soft)}
+.wm-status{font-size:13px;min-height:1.2em;font-weight:500}
+.wm-footer{display:flex;gap:8px;margin-top:20px;flex-wrap:wrap}
+@media (prefers-reduced-motion:reduce){.wm-overlay,.wm-card{animation:none}}
 `;
   document.head.appendChild(style);
 }
@@ -2572,8 +2608,8 @@ function injectNoKeyBanner() {
   if (config.apiKey) return;
   const banner = document.createElement("div");
   banner.id = "noKeyBanner";
-  banner.innerHTML = `<span>El Asistente IA necesita configuración.</span><button type="button" id="noKeySetupBtn">Configurar gratis →</button>`;
-  banner.style.cssText = "position:fixed;bottom:1rem;left:50%;transform:translateX(-50%);background:var(--surface,#1e2330);border:1px solid var(--accent,#7c3aed);border-radius:2rem;padding:.5rem 1.1rem;display:flex;align-items:center;gap:.8rem;font-size:.82rem;color:var(--muted,#94a3b8);z-index:900;box-shadow:0 8px 24px rgba(0,0,0,.4);white-space:nowrap";
+  banner.innerHTML = `<span>El Asistente IA necesita configuración.</span><button type="button" id="noKeySetupBtn" class="text-btn primary">Configurar</button>`;
+  banner.style.cssText = "position:fixed;bottom:calc(18px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);background:var(--surface);border-radius:999px;padding:6px 6px 6px 14px;display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);z-index:900;box-shadow:var(--shadow-pop);white-space:nowrap;max-width:calc(100vw - 32px)";
   document.body.appendChild(banner);
   banner.querySelector("#noKeySetupBtn").addEventListener("click", () => {
     injectWelcomeModalStyles();
