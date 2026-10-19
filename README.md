@@ -59,4 +59,5 @@ Las claves se escriben desde la interfaz y quedan en `localStorage` del navegado
 - `riemann_sumas_javascript.js` — interfaz: gráficas, tablas, calculadora, hoja A4, juegos y asistente.
 - `riemann_sumas_javascript.css` — estilos.
 - `riemann_ai_server.py` — servidor local y proxy de IA.
+- `vendor/katex/` — KaTeX 0.16.11 (licencia MIT) con sus fuentes, para que las fórmulas se dibujen sin depender de una CDN.
 - `tests/` — pruebas automatizadas.

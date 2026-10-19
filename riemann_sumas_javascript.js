@@ -514,23 +514,26 @@ function themeColors() {
   const token = (name, fallback) => css.getPropertyValue(name).trim() || fallback;
   return {
     surface: token("--surface", "#ffffff"),
-    text: token("--text", "#171717"),
-    muted: token("--muted", "#6b6b6b"),
-    line: token("--line", "rgba(0,0,0,.08)"),
-    line2: token("--line-2", "rgba(0,0,0,.14)"),
-    faint: token("--faint", "#a3a3a3"),
-    blue: token("--blue", "#0a6cde"),
-    green: token("--green-soft", "rgba(23,128,61,.16)"),
-    red: token("--red-soft", "rgba(217,45,52,.08)"),
-    redStrong: token("--red", "#d92d34"),
-    greenStrong: token("--green", "#17803d"),
-    orange: token("--orange", "#e8890c"),
-    violet: token("--violet", "#6e3fd8"),
-    sans: token("--sans", "system-ui, sans-serif"),
-    mono: token("--mono", "monospace")
+    text: token("--text", "#1d1d1f"),
+    muted: token("--muted", "#6e6e73"),
+    line: token("--line", "rgba(60,60,67,.12)"),
+    line2: token("--line-2", "rgba(60,60,67,.22)"),
+    faint: token("--faint", "#aeaeb2"),
+    fill: token("--fill", "rgba(118,118,128,.12)"),
+    blue: token("--blue", "#007aff"),
+    blueSoft: token("--blue-soft", "rgba(0,122,255,.1)"),
+    blueLine: token("--blue-line", "rgba(0,122,255,.35)"),
+    redSoft: token("--red-soft", "rgba(255,59,48,.1)"),
+    redLine: token("--red-line", "rgba(255,59,48,.35)"),
+    red: token("--red", "#d70015"),
+    orange: token("--orange", "#ff9500"),
+    violet: token("--violet", "#5856d6"),
+    sans: token("--sans", "system-ui, sans-serif")
   };
 }
 
+// Plano cartesiano con el lenguaje de las gráficas de Apple: ejes discretos,
+// rejilla tenue, curva en el azul del sistema y rectángulos translúcidos.
 function drawGraph(input) {
   if (typeof Plotly === "undefined" || !STATE.fn || !STATE.data) return;
   const colors = themeColors();
@@ -544,47 +547,48 @@ function drawGraph(input) {
   const viewRight = right + pad;
   const curve = curveSamples(STATE.fn, viewLeft, viewRight, STATE.integral?.singularities || []);
   const traces = [];
+  const infinite = $("infinityInput").checked;
 
-  if ($("rectsInput").checked && !$("infinityInput").checked) {
+  if ($("rectsInput").checked && !infinite) {
     const skip = Math.max(1, Math.ceil(STATE.data.rects.length / MAX_DRAW_BARS));
     const bx = [];
     const by = [];
     const bw = [];
     const bc = [];
+    const bl = [];
     for (let k = 0; k < STATE.data.rects.length; k += skip) {
       const r = STATE.data.rects[k];
       bx.push((r.x0 + r.x1) / 2);
       by.push(r.y);
-      bw.push(Math.abs(r.x1 - r.x0) * 0.96);
-      bc.push(r.y >= 0 ? colors.green : colors.red);
+      bw.push(Math.abs(r.x1 - r.x0) * (STATE.data.rects.length > 120 ? 1 : 0.9));
+      bc.push(r.y >= 0 ? colors.blueSoft : colors.redSoft);
+      bl.push(r.y >= 0 ? colors.blueLine : colors.redLine);
     }
     traces.push({
       type: "bar",
       x: bx,
       y: by,
       width: bw,
-      marker: { color: bc, line: { color: colors.line2, width: 1 } },
-      hovertemplate: "x: %{x:.4f}<br>f(x): %{y:.4f}<extra>Rectángulo</extra>",
+      marker: { color: bc, line: { color: bl, width: STATE.data.rects.length > 120 ? 0 : 1 }, cornerradius: STATE.data.rects.length > 60 ? 0 : 3 },
+      hovertemplate: "Rectángulo<br>x* = %{x:.4f}<br>f(x*) = %{y:.4f}<extra></extra>",
       showlegend: false
     });
   }
 
-  if ($("rectsInput").checked && $("infinityInput").checked) {
+  if ($("rectsInput").checked && infinite) {
     const px = [];
     const py = [];
-    const nx = [];
     const ny = [];
-    for (let i = 0; i <= 360; i++) {
-      const xv = left + (right - left) * i / 360;
+    for (let i = 0; i <= 480; i++) {
+      const xv = left + (right - left) * i / 480;
       const raw = STATE.fn(xv);
       const yv = Number.isFinite(raw) ? raw : 0;
       px.push(xv);
       py.push(yv >= 0 ? yv : 0);
-      nx.push(xv);
       ny.push(yv < 0 ? yv : 0);
     }
-    traces.push({ x: px, y: py, type: "scatter", mode: "none", fill: "tozeroy", fillcolor: colors.green, showlegend: false, hoverinfo: "skip" });
-    traces.push({ x: nx, y: ny, type: "scatter", mode: "none", fill: "tozeroy", fillcolor: colors.red, showlegend: false, hoverinfo: "skip" });
+    traces.push({ x: px, y: py, type: "scatter", mode: "none", fill: "tozeroy", fillcolor: colors.blueSoft, showlegend: false, hoverinfo: "skip" });
+    traces.push({ x: px, y: ny, type: "scatter", mode: "none", fill: "tozeroy", fillcolor: colors.redSoft, showlegend: false, hoverinfo: "skip" });
   }
 
   traces.push({
@@ -592,12 +596,13 @@ function drawGraph(input) {
     y: curve.y,
     type: "scatter",
     mode: "lines",
-    line: { color: colors.blue, width: 2.5 },
+    line: { color: colors.blue, width: 3 },
     name: "f(x)",
-    hovertemplate: "x: %{x:.4f}<br>f(x): %{y:.4f}<extra></extra>"
+    showlegend: false,
+    hovertemplate: "x = %{x:.4f}<br>f(x) = %{y:.4f}<extra></extra>"
   });
 
-  if ($("samplesInput").checked && !$("infinityInput").checked) {
+  if ($("samplesInput").checked && !infinite) {
     const skip = Math.max(1, Math.ceil(STATE.data.rects.length / 120));
     const sx = [];
     const sy = [];
@@ -610,58 +615,75 @@ function drawGraph(input) {
       y: sy,
       type: "scatter",
       mode: "markers",
-      marker: { color: colors.orange, size: 6, line: { color: colors.surface, width: 1.5 } },
-      hovertemplate: "x*: %{x:.4f}<br>f(x*): %{y:.4f}<extra>Muestra</extra>",
+      marker: { color: colors.surface, size: STATE.data.rects.length > 60 ? 5 : 8, line: { color: colors.orange, width: 2 } },
+      hovertemplate: "Muestra<br>x* = %{x:.4f}<br>f(x*) = %{y:.4f}<extra></extra>",
       showlegend: false
     });
   }
 
-  const gridColor = $("gridInput").checked ? colors.line : "rgba(0,0,0,0)";
+  const showGrid = $("gridInput").checked;
+  const axis = {
+    showline: false,
+    showgrid: showGrid,
+    gridcolor: colors.line,
+    gridwidth: 1,
+    zeroline: true,
+    zerolinecolor: colors.faint,
+    zerolinewidth: 1.5,
+    ticks: "",
+    ticklen: 0,
+    nticks: 9,
+    tickfont: { family: colors.sans, size: 11, color: colors.muted },
+    automargin: true,
+    showspikes: true,
+    spikecolor: colors.line2,
+    spikethickness: 1,
+    spikedash: "solid",
+    spikemode: "across",
+    spikesnap: "cursor"
+  };
+  const boundLabel = (x, text, yshift) => ({
+    x,
+    y: 0,
+    text,
+    showarrow: false,
+    yshift,
+    bgcolor: colors.surface,
+    bordercolor: colors.line2,
+    borderwidth: 1,
+    borderpad: 4,
+    font: { size: 11, color: colors.text, family: colors.sans }
+  });
   const layout = {
     paper_bgcolor: colors.surface,
     plot_bgcolor: colors.surface,
-    font: { family: colors.sans, size: 11, color: colors.muted },
-    hoverlabel: { bgcolor: colors.surface, bordercolor: colors.line2, font: { family: colors.mono, color: colors.text } },
-    margin: { l: 54, r: 20, t: 12, b: 42 },
-    xaxis: {
-      range: [viewLeft, viewRight],
-      showline: true,
-      linecolor: colors.line2,
-      mirror: false,
-      gridcolor: gridColor,
-      zerolinecolor: colors.faint,
-      zerolinewidth: 1.3,
-      tickfont: { family: colors.mono, size: 11, color: colors.muted }
+    font: { family: colors.sans, size: 12, color: colors.muted },
+    hoverlabel: {
+      bgcolor: colors.surface,
+      bordercolor: colors.line2,
+      font: { family: colors.sans, size: 12, color: colors.text },
+      align: "left"
     },
-    yaxis: {
-      ...(curve.range ? { range: curve.range } : {}),
-      showline: true,
-      linecolor: colors.line2,
-      mirror: false,
-      gridcolor: gridColor,
-      zerolinecolor: colors.faint,
-      zerolinewidth: 1.3,
-      tickfont: { family: colors.mono, size: 11, color: colors.muted }
-    },
+    margin: { l: 44, r: 18, t: 8, b: 30 },
+    xaxis: { ...axis, range: [viewLeft, viewRight] },
+    yaxis: { ...axis, ...(curve.range ? { range: curve.range } : {}) },
     shapes: [
-      { type: "line", x0: a, x1: a, y0: 0, y1: 1, yref: "paper", line: { color: colors.violet, width: 1, dash: "dot" } },
-      { type: "line", x0: b, x1: b, y0: 0, y1: 1, yref: "paper", line: { color: colors.violet, width: 1, dash: "dot" } }
+      { type: "line", x0: a, x1: a, y0: 0, y1: 1, yref: "paper", line: { color: colors.faint, width: 1, dash: "dot" }, layer: "below" },
+      { type: "line", x0: b, x1: b, y0: 0, y1: 1, yref: "paper", line: { color: colors.faint, width: 1, dash: "dot" }, layer: "below" }
     ],
-    annotations: [
-      { x: a, y: 0, text: `a=${fmt(a, 2)}`, showarrow: false, yshift: -16, font: { size: 11, color: colors.violet, family: colors.mono } },
-      { x: b, y: 0, text: `b=${fmt(b, 2)}`, showarrow: false, yshift: 16, font: { size: 11, color: colors.violet, family: colors.mono } }
-    ],
-    hovermode: "x unified",
+    annotations: [boundLabel(a, `a = ${fmt(a, 2)}`, -18), boundLabel(b, `b = ${fmt(b, 2)}`, -18)],
+    hovermode: "closest",
+    hoverdistance: 24,
     dragmode: "pan",
     bargap: 0,
     bargroupgap: 0
   };
   const config = {
     responsive: true,
-    displayModeBar: true,
+    displayModeBar: "hover",
     displaylogo: false,
     scrollZoom: true,
-    modeBarButtonsToRemove: ["select2d", "lasso2d", "autoScale2d"],
+    modeBarButtonsToRemove: ["select2d", "lasso2d", "autoScale2d", "zoomIn2d", "zoomOut2d", "toggleSpikelines", "hoverClosestCartesian", "hoverCompareCartesian"],
     toImageButtonOptions: { filename: "yos_sphere", format: "png", scale: 2 }
   };
   Plotly.react("plotlyGraph", traces, layout, config);
@@ -679,8 +701,8 @@ function integralLabel(value = STATE.exact, status = STATE.integral?.status) {
 }
 
 function integralTex(value = STATE.exact, status = STATE.integral?.status) {
-  if (status === "divergent") return "\text{diverge}";
-  if (status === "undefined") return "\text{no definida}";
+  if (status === "divergent") return "\\text{diverge}";
+  if (status === "undefined") return "\\text{no definida}";
   return fmt(value);
 }
 
@@ -870,8 +892,8 @@ function boundTex(value) {
 function definiteResultTex(solution) {
   const d = solution.definite;
   const integral = `\\int_{${boundTex(d.a)}}^{${boundTex(d.b)}}\\!\\left(${exprToLatex(solution.expr)}\\right)dx`;
-  if (d.status === "divergent") return `${integral}\;\\text{diverge}`;
-  if (d.status === "undefined") return `${integral}\;\\text{no existe en }\\mathbb{R}`;
+  if (d.status === "divergent") return `${integral}\\quad\\text{diverge}`;
+  if (d.status === "undefined") return `${integral}\\quad\\text{no existe en }\\mathbb{R}`;
   if (d.method === "symbolic") {
     const exact = `\\left[${exprToLatex(solution.anti)}\\right]_{${boundTex(d.a)}}^{${boundTex(d.b)}}`;
     const rounded = Math.round(d.value);
@@ -888,7 +910,7 @@ function renderSolverSummary(solution) {
   const rule = solution.rules.length ? solution.rules.join(" + ") : RULE_NUMERIC_LABEL;
   const rows = [`<div><span>Regla usada</span><b>${escapeHtml(rule)}</b></div>`];
   if (solution.anti) {
-    rows.push(`<div><span>Primitiva</span><b class="summary-math">${mathToString(`${exprToLatex(solution.anti)}+C`, false)}</b></div>`);
+    rows.push(`<div><span>Primitiva</span><b class="summary-math">${mathToString(`\\displaystyle ${exprToLatex(solution.anti)}+C`, false)}</b></div>`);
   } else {
     rows.push(`<div><span>Primitiva</span><b>Sin primitiva elemental</b></div>`);
   }
@@ -898,13 +920,13 @@ function renderSolverSummary(solution) {
     const fraction = finite ? fractionValueText(d.value) : "";
     const piForm = finite && !fraction ? piMultipleText(d.value) : "";
     if (fraction || piForm) {
-      rows.push(`<div><span>Forma exacta</span><b class="summary-math">${mathToString(exprToLatex(fraction || piForm), false)}</b></div>`);
+      rows.push(`<div><span>Forma exacta</span><b class="summary-math">${mathToString(`\\displaystyle ${exprToLatex(fraction || piForm)}`, false)}</b></div>`);
     }
   } else {
     rows.push(`<div><span>Decimal</span><b>Sin límites definidos</b></div>`);
   }
   if (solution.partial) {
-    rows.push(`<div><span>Fracción parcial</span><b class="summary-math">${mathToString(exprToLatex(solution.partial.dec), false)}</b></div>`);
+    rows.push(`<div><span>Fracción parcial</span><b class="summary-math">${mathToString(`\\displaystyle ${exprToLatex(solution.partial.dec)}`, false)}</b></div>`);
   }
   const note = d?.message || (!solution.anti ? solution.symbolicError : "");
   if (note) rows.push(`<div class="summary-note"><span>Diagnóstico</span><b>${escapeHtml(note)}</b></div>`);
@@ -1262,7 +1284,7 @@ function renderA4Canvas() {
   }
 
   ctx.save();
-  ctx.strokeStyle = "rgba(47,128,237,.12)";
+  ctx.strokeStyle = "rgba(0,122,255,.10)";
   ctx.lineWidth = 1;
   for (let x = 0; x <= A4.widthCm; x++) {
     const px = x / A4.widthCm * canvas.width;
@@ -1282,16 +1304,16 @@ function renderA4Canvas() {
 
   const selection = getA4Selection();
   if (A4.points.length >= 3) {
-    ctx.fillStyle = "rgba(47,128,237,.24)";
-    ctx.strokeStyle = "rgba(47,128,237,.55)";
+    ctx.fillStyle = "rgba(0,122,255,.16)";
+    ctx.strokeStyle = "rgba(0,122,255,.4)";
     ctx.lineWidth = 1;
     for (const rect of selection.rects) {
       ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
       ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
     }
 
-    ctx.fillStyle = "rgba(32,164,100,.08)";
-    ctx.strokeStyle = "rgba(32,164,100,.9)";
+    ctx.fillStyle = "rgba(0,122,255,.05)";
+    ctx.strokeStyle = "#007aff";
     ctx.lineWidth = 2;
     ctx.beginPath();
     A4.points.forEach((point, index) => {
@@ -1301,7 +1323,7 @@ function renderA4Canvas() {
     ctx.closePath();
     ctx.stroke();
   } else if (A4.points.length > 1) {
-    ctx.strokeStyle = "#f59e0b";
+    ctx.strokeStyle = "#ff9500";
     ctx.lineWidth = 2;
     ctx.beginPath();
     A4.points.forEach((point, index) => {
@@ -1312,15 +1334,15 @@ function renderA4Canvas() {
   }
 
   A4.points.forEach((point, index) => {
-    ctx.fillStyle = "#2f80ed";
-    ctx.strokeStyle = "#fff";
+    ctx.fillStyle = "#007aff";
+    ctx.strokeStyle = "#ffffff";
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(point.x, point.y, 6, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
-    ctx.fillStyle = "#1f2937";
-    ctx.font = "700 13px Inter, sans-serif";
+    ctx.fillStyle = "#1d1d1f";
+    ctx.font = "600 13px -apple-system, BlinkMacSystemFont, Inter, 'Segoe UI', sans-serif";
     ctx.fillText(String(index + 1), point.x + 8, point.y - 8);
   });
 
@@ -2596,7 +2618,7 @@ function injectWelcomeModalStyles() {
 @keyframes wmIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}
 .wm-header{display:flex;gap:12px;align-items:flex-start;margin-bottom:20px}
 .wm-icon{width:28px;height:28px;flex:none;margin-top:2px}
-.wm-header strong{display:block;font:400 22px/1.15 var(--display);letter-spacing:-.01em;color:var(--text)}
+.wm-header strong{display:block;font:700 22px/1.15 var(--display);letter-spacing:-.025em;color:var(--text)}
 .wm-header p{font-size:13px;color:var(--muted);margin:.2rem 0 0}
 .wm-body{display:flex;flex-direction:column;gap:14px}
 .wm-step{display:flex;gap:12px;align-items:flex-start}

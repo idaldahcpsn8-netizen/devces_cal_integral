@@ -6,8 +6,8 @@
   <title>Yos_Sphere</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./vendor/katex/katex.min.css">
   <link rel="stylesheet" href="./riemann_sumas_javascript.css">
 </head>
 <body>
@@ -46,12 +46,23 @@
       </div>
 
       <section class="control-block">
-        <label class="field field-wide">
-          <span>f(x)</span>
-          <input id="exprInput" type="text" value="sin(x) + 0.5*x" spellcheck="false" autocomplete="off">
-        </label>
-        <div id="mainExprPreview" class="math-preview"></div>
+        <h2 class="group-label">Función</h2>
+        <div class="group">
+          <label class="field field-wide">
+            <span>f(x)</span>
+            <input id="exprInput" type="text" value="sin(x) + 0.5*x" spellcheck="false" autocomplete="off">
+          </label>
+          <div id="mainExprPreview" class="math-preview"></div>
+        </div>
+        <div class="example-row" aria-label="Ejemplos rápidos">
+          <button class="chip" type="button" data-example="sin(x) + 0.5*x">sin(x)+0.5x</button>
+          <button class="chip" type="button" data-example="x**2 - 3*x + 2">Parábola</button>
+          <button class="chip" type="button" data-example="cos(x) + 1">cos(x)+1</button>
+          <button class="chip" type="button" data-example="exp(-x^2)">e^(−x²)</button>
+        </div>
 
+        <h2 class="group-label">Intervalo y partición</h2>
+        <div class="group">
         <div class="grid-two">
           <label class="field">
             <span>a</span>
@@ -70,7 +81,9 @@
           </div>
           <input id="nRange" class="n-range" type="range" value="40" min="1" max="20000" step="1" aria-label="Número de rectángulos">
         </div>
+        </div>
 
+        <h2 class="group-label">Punto de muestra</h2>
         <div class="segmented" role="group" aria-label="Método de suma">
           <button class="seg-btn" type="button" data-method="left">Izquierda</button>
           <button class="seg-btn" type="button" data-method="right">Derecha</button>
@@ -82,21 +95,16 @@
           <option value="midpoint" selected>Punto medio</option>
         </select>
 
-        <div class="switches">
-          <label class="switch"><input id="rectsInput" type="checkbox" checked><span>Rectángulos</span></label>
-          <label class="switch"><input id="samplesInput" type="checkbox" checked><span>Muestras</span></label>
-          <label class="switch"><input id="gridInput" type="checkbox" checked><span>Cuadrícula</span></label>
-          <label class="switch"><input id="infinityInput" type="checkbox"><span>n→∞</span></label>
-        </div>
-
-        <div class="example-row" aria-label="Ejemplos rápidos">
-          <button class="chip" type="button" data-example="sin(x) + 0.5*x">sin(x)+0.5x</button>
-          <button class="chip" type="button" data-example="x**2 - 3*x + 2">Parábola</button>
-          <button class="chip" type="button" data-example="cos(x) + 1">cos(x)+1</button>
-          <button class="chip" type="button" data-example="exp(-x^2)">e^(−x²)</button>
+        <h2 class="group-label">Mostrar</h2>
+        <div class="group switches">
+          <label class="switch"><span>Rectángulos</span><input id="rectsInput" type="checkbox" role="switch" checked></label>
+          <label class="switch"><span>Puntos de muestra</span><input id="samplesInput" type="checkbox" role="switch" checked></label>
+          <label class="switch"><span>Cuadrícula</span><input id="gridInput" type="checkbox" role="switch" checked></label>
+          <label class="switch"><span>Límite n → ∞</span><input id="infinityInput" type="checkbox" role="switch"></label>
         </div>
       </section>
 
+      <h2 class="group-label results-label">Resultados</h2>
       <section class="object-list" aria-label="Resultados">
         <b id="objectFunction" class="sr-only">f(x)</b>
         <div class="stat stat-wide">
@@ -411,7 +419,7 @@
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
+  <script src="./vendor/katex/katex.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.7/dist/gsap.min.js"></script>
   <script src="https://unpkg.com/lucide@0.263.1/dist/umd/lucide.min.js"></script>
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
