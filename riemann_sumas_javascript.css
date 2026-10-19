@@ -982,6 +982,12 @@ body:not([data-section="riemann"]) .topbar > .status-pill{padding-right:0}
     grid-template-areas:"algebra graph" "details details";
   }
   .workspace.details-collapsed{grid-template-columns:minmax(310px,350px) minmax(420px,1fr)}
+  /* Las filas ya no caben en una pantalla: se desplaza la página entera. */
+  body{height:auto;min-height:100vh;overflow:auto}
+  .workspace{height:auto}
+  .workspace:not(.section-riemann){grid-template-rows:auto}
+  .workspace:not(.section-riemann) .panes{flex:none;overflow:visible}
+  .workspace:not(.section-riemann) .pane{height:auto;overflow:visible}
 }
 
 @media (max-width:900px){
@@ -997,7 +1003,12 @@ body:not([data-section="riemann"]) .topbar > .status-pill{padding-right:0}
   .graph-shell{min-height:62vh;grid-template-rows:auto 52vh 66px}
   .graph-head{min-height:60px;flex-wrap:wrap;padding:12px 16px}
   .graph-badges{flex-wrap:wrap;flex-shrink:1;min-width:0}
-  .details-panel{min-height:520px}
+  /* Una sola barra de desplazamiento (la de la página): los paneles crecen
+     con su contenido en vez de desplazarse por dentro y quedar cortados. */
+  .details-panel{min-height:0}
+  .panes{flex:none;overflow:visible}
+  .pane{height:auto;overflow:visible}
+  .twrap{max-height:65vh}
   .a4-workbench{grid-template-columns:1fr}
   .math-keypad{grid-template-columns:repeat(6,1fr)}
   .bubble-arena,.game-feedback{grid-template-columns:1fr}
