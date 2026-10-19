@@ -26,35 +26,8 @@ const A4 = {
   fileName: "Sin archivo"
 };
 
-const AI_CONFIG_KEY = "Yos_Sphere.aiConfig";
-// Claves usadas antes del cambio de nombre: se leen para no perder la configuración guardada.
-const LEGACY_AI_CONFIG_KEYS = ["Dev_Aldah_V3.aiConfig", "Dev_Aldah_V3.nvidiaConfig"];
 let activeMathInput = null;
-let chatRequestId = 0;
-let sectionAiRequestId = 0;
 
-const SECTION_HELP = {
-  import: {
-    title: "Ayuda IA: Importar archivo",
-    hint: "Hola, ¿en qué te puedo ayudar con la hoja A4?",
-    reply: "En Importar archivo puedes cargar imagen o PDF, rodear un área con puntos y calcularla con rectángulos de punto medio dentro del contorno."
-  },
-  riemann: {
-    title: "Ayuda IA: Suma de Riemann",
-    hint: "Hola, ¿en qué te puedo ayudar con la suma de Riemann?",
-    reply: "En Suma de Riemann revisa f(x), el intervalo [a,b], el valor n y el método de muestra. La tabla, fórmulas y pasos se actualizan con esos datos."
-  },
-  integrals: {
-    title: "Ayuda IA: Calculadora",
-    hint: "Hola, ¿en qué te puedo ayudar con integrales?",
-    reply: "En Calculadora escribe el integrando, usa límites a y b si quieres decimal, y pulsa Resolver para ver regla usada, fracción parcial, exacto y procedimiento."
-  },
-  games: {
-    title: "Ayuda IA: Juegos",
-    hint: "Hola, ¿en qué te puedo ayudar con los juegos?",
-    reply: "En Juegos toca la burbuja del método correcto. Integrales practica inmediata, fracciones parciales, cambio de variable y partes; Derivadas practica reglas básicas, producto, cociente y cadena."
-  }
-};
 
 const GAME_BANKS = {
   integrals: {
@@ -256,107 +229,6 @@ function escapeHtml(text) {
     .replace(/'/g, "&#039;");
 }
 
-function wrapLatexLinearPart(text) {
-  const value = String(text || "").trim();
-  return /^[a-zA-Z0-9.+-]+(?:\^-?[a-zA-Z0-9.]+)?$/.test(value) ? value : `(${value})`;
-}
-
-function latexToLinear(text) {
-  let out = String(text || "");
-  for (let i = 0; i < 4; i++) {
-    out = out.replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/g, (_, numerator, denominator) => {
-      const top = latexToLinear(numerator);
-      const bottom = latexToLinear(denominator);
-      return `${wrapLatexLinearPart(top)}/${wrapLatexLinearPart(bottom)}`;
-    });
-  }
-  return out
-    .replace(/\\left|\\right/g, "")
-    .replace(/\\,/g, "")
-    .replace(/\\cdot/g, "*")
-    .replace(/\\approx/g, "≈")
-    .replace(/\\int/g, "integral")
-    .replace(/\\sum/g, "sum")
-    .replace(/\\ln/g, "ln")
-    .replace(/\\sin/g, "sin")
-    .replace(/\\cos/g, "cos")
-    .replace(/\\tan/g, "tan")
-    .replace(/\\arctan/g, "atan")
-    .replace(/\^\{([^{}]+)\}/g, "^$1")
-    .replace(/[{}]/g, "")
-    .trim();
-}
-
-function renderInlineAiText(text) {
-  const source = String(text ?? "");
-  const mathPattern = /(\$\$([\s\S]+?)\$\$|\\\[([\s\S]+?)\\\]|\\\(([\s\S]+?)\\\)|\$([^\n$]+?)\$)/g;
-  let html = "";
-  let last = 0;
-  let match;
-
-  const renderPlain = plain => escapeHtml(plain)
-    .replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/g, (_, numerator, denominator) => `${wrapLatexLinearPart(latexToLinear(numerator))}/${wrapLatexLinearPart(latexToLinear(denominator))}`)
-    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-    .replace(/`([^`]+)`/g, "<code>$1</code>");
-
-  while ((match = mathPattern.exec(source))) {
-    html += renderPlain(source.slice(last, match.index));
-    const tex = match[2] || match[3] || match[4] || match[5] || "";
-    html += `<span class="linear-math">${escapeHtml(latexToLinear(tex))}</span>`;
-    last = match.index + match[0].length;
-  }
-  html += renderPlain(source.slice(last));
-  return html;
-}
-
-function renderAiBlock(text) {
-  const lines = String(text ?? "").split(/\r?\n/);
-  let html = "";
-  let listOpen = false;
-
-  const closeList = () => {
-    if (listOpen) {
-      html += "</ul>";
-      listOpen = false;
-    }
-  };
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed) {
-      closeList();
-      continue;
-    }
-    const bullet = trimmed.match(/^[-*]\s+(.+)$/);
-    if (bullet) {
-      if (!listOpen) {
-        html += "<ul>";
-        listOpen = true;
-      }
-      html += `<li>${renderInlineAiText(bullet[1])}</li>`;
-      continue;
-    }
-    closeList();
-    html += `<p>${renderInlineAiText(trimmed)}</p>`;
-  }
-  closeList();
-  return html;
-}
-
-function renderAiContent(text) {
-  const parts = String(text ?? "").trim().split(/```/);
-  return parts.map((part, index) => {
-    if (index % 2 === 1) {
-      const code = part.replace(/^\w+\s*\n/, "");
-      return `<pre><code>${escapeHtml(code.trim())}</code></pre>`;
-    }
-    return renderAiBlock(part);
-  }).join("");
-}
-
-function setRenderedMessage(el, text) {
-  el.innerHTML = `<div class="ai-message-content">${renderAiContent(text)}</div>`;
-}
 
 function stepHTML(step) {
   const math = step.tex ? `<div class="smath">${mathToString(step.tex, true)}</div>` : "";
@@ -393,18 +265,6 @@ function currentGameItem() {
   return bank.items[GAME_STATE.index % bank.items.length];
 }
 
-function gameSolutionText() {
-  const bank = currentGameBank();
-  const item = currentGameItem();
-  return [
-    `Juego: ${bank.label}.`,
-    `Ejercicio: ${item.linear}.`,
-    `Respuesta correcta: ${item.answer}.`,
-    `Resultado: ${item.result}.`,
-    item.fraction ? `Forma en fracción: ${item.fraction}.` : "",
-    `Motivo: ${item.why}`
-  ].filter(Boolean).join("\n");
-}
 
 function renderGame() {
   if (!$("gameExpression")) return;
@@ -860,10 +720,10 @@ function updateTable() {
     tr.innerHTML = `
       <td>${r.i}</td>
       <td>[${fmt(r.p, 3)}, ${fmt(r.q, 3)}]</td>
-      <td>${fmt(r.sample)}</td>
-      <td>${fmt(r.y)}</td>
-      <td>${fmt(r.area)}</td>
-      <td>${fmt(r.cum)}</td>`;
+      <td>${fmt(r.sample, 4)}</td>
+      <td>${fmt(r.y, 4)}</td>
+      <td>${fmt(r.area, 4)}</td>
+      <td>${fmt(r.cum, 4)}</td>`;
     body.appendChild(tr);
   }
 }
@@ -973,7 +833,6 @@ function updateAll() {
     drawGraph(input);
     updateTable();
     updateSteps(input);
-    if ($("pAssistant")?.classList.contains("show")) updateAssistant("summary");
 
     const warning = riemannWarning(input);
     const status = $("infinityInput").checked
@@ -1164,9 +1023,6 @@ function switchTab(name) {
   if (name === "pTools") {
     setSectionActive("integrals");
     setWorkspaceSection("integrals");
-  } else if (name === "pAssistant") {
-    setSectionActive("assistant");
-    setWorkspaceSection("assistant");
   } else if (name === "pGames") {
     setSectionActive("games");
     setWorkspaceSection("games");
@@ -1192,14 +1048,14 @@ function setSectionActive(section) {
   });
   moveNavIndicator();
   if (section !== "riemann") stopPlayLimit();
-  updateSectionAiHelp();
 }
 
 function setWorkspaceSection(section) {
   const workspace = document.querySelector(".workspace");
   if (!workspace) return;
-  workspace.classList.remove("section-import", "section-riemann", "section-integrals", "section-assistant", "section-games");
+  workspace.classList.remove("section-import", "section-riemann", "section-integrals", "section-games");
   workspace.classList.add(`section-${section}`);
+  document.body.dataset.section = section;
 }
 
 function showDetailsPanel() {
@@ -1221,7 +1077,6 @@ function switchMainSection(section) {
 
   if (section === "riemann") {
     switchTab("pTabla");
-    $("exprInput").focus();
     updateAll();
     return;
   }
@@ -1230,16 +1085,8 @@ function switchMainSection(section) {
   if (section === "integrals") {
     switchTab("pTools");
     switchSub("sInt");
-    $("integralExpr").focus();
     solveIntegralAdvanced();
     setStatus("Integrales");
-    return;
-  }
-
-  if (section === "assistant") {
-    switchTab("pAssistant");
-    updateAssistant("summary");
-    setStatus("Asistente");
     return;
   }
 
@@ -1247,6 +1094,58 @@ function switchMainSection(section) {
     switchTab("pGames");
     renderGame();
     setStatus("Juegos");
+  }
+}
+
+// ── Pantalla de inicio y navegación por #ancla ────────────────────────────
+// Sin ancla se muestra el menú de inicio; #riemann, #integrals, #import y #games
+// abren cada sección. Así el botón «atrás» del navegador vuelve al menú.
+const SECTIONS = ["riemann", "integrals", "import", "games"];
+let currentSection = null;
+
+function showHome() {
+  currentSection = null;
+  stopPlayLimit();
+  document.body.classList.add("is-home");
+  document.body.dataset.section = "home";
+  document.title = "Yos_Sphere";
+}
+
+function route() {
+  const section = location.hash.replace(/^#/, "");
+  if (!SECTIONS.includes(section)) {
+    showHome();
+    return;
+  }
+  const wasHome = document.body.classList.contains("is-home");
+  document.body.classList.remove("is-home");
+  if (section !== currentSection || wasHome) {
+    currentSection = section;
+    switchMainSection(section);
+    requestAnimationFrame(() => {
+      moveNavIndicator();
+      if (section === "riemann" && typeof Plotly !== "undefined") Plotly.Plots.resize("plotlyGraph");
+    });
+    window.scrollTo(0, 0);
+  }
+}
+
+function goToSection(section) {
+  if (location.hash === `#${section}`) route();
+  else location.hash = section;
+}
+
+function goHome() {
+  if (!location.hash || location.hash === "#") {
+    showHome();
+    return;
+  }
+  // Quita el ancla sin dejar «#» en la dirección cuando el navegador lo permite.
+  try {
+    history.pushState(null, "", location.pathname + location.search);
+    route();
+  } catch (_) {
+    location.hash = "";
   }
 }
 
@@ -1309,7 +1208,8 @@ function applyImportedConfig(config) {
   if (config.method && ["left", "right", "midpoint"].includes(String(config.method))) {
     $("methodInput").value = String(config.method);
   }
-  switchMainSection("riemann");
+  goToSection("riemann");
+  updateAll();
   setStatus("Archivo importado correctamente");
 }
 
@@ -1558,13 +1458,6 @@ function applyCommandInput() {
   updateAll();
 }
 
-function updateAssistant(mode = "summary") {
-  const output = $("assistantOutput");
-  const context = $("assistantContext");
-  if (!output || !context) return;
-  context.textContent = "Hola, ¿en qué te puedo ayudar?";
-  output.textContent = "Hola, ¿en qué te puedo ayudar?";
-}
 
 function insertAtCursor(input, text) {
   if (!input) return;
@@ -1626,678 +1519,13 @@ function handleMathKey(button) {
   updateMathPreviews();
 }
 
-function addChatMessage(role, text) {
-  const box = $("chatMessages");
-  const div = document.createElement("div");
-  div.className = `chat-message ${role}`;
-  setRenderedMessage(div, text);
-  box.appendChild(div);
-  box.scrollTop = box.scrollHeight;
-}
-
-function localAssistantReply(question) {
-  const expr = $("integralExpr")?.value || STATE.input?.expr || "f(x)";
-  if (/formula|log|ln/i.test(question)) return "Para logaritmos usamos la forma integral u'/u dx = ln(abs(u)) + C. Si aparece una fraccion racional, primero conviene descomponerla en fracciones parciales.";
-  if (/decimal|aprox|valor/i.test(question)) return "Para obtener decimal coloca limites a y b. La app evalua la antiderivada si existe y la contrasta con integracion numerica adaptativa (Gauss-Kronrod), que tambien detecta integrales impropias y divergentes.";
-  if (/primitiva|antiderivada|compar/i.test(question)) return "La calculadora muestra la antiderivada F(x) y la usa para evaluar integrales definidas cuando hay limites.";
-  return `Estoy revisando ${linearExpr(expr)}. Pulsa Resolver para ver regla usada, exacto, decimal y procedimiento paso a paso.`;
-}
-
-function isGreeting(text) {
-  return /^(hola|ola|buenas|buenos dias|buenas tardes|buenas noches|hey|hi)\s*[!.?]*$/i.test(String(text || "").trim());
-}
-
-function normalizeQueryText(text) {
-  return String(text || "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[¿?¡!.,;:]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function sectionSnapshotReply(section = currentHelpSection()) {
-  if (section === "integrals") {
-    const expr = $("integralExpr")?.value || "sin integrando";
-    const a = $("integralA")?.value.trim();
-    const b = $("integralB")?.value.trim();
-    const limits = a && b ? ` con limites [${linearExpr(a)}, ${linearExpr(b)}]` : " sin limites definidos";
-    return `Veo la calculadora de integrales. El integrando actual es: \`${linearExpr(expr)}\`. Esta configurada${limits}.`;
-  }
-  if (section === "import") {
-    const selection = getA4Selection();
-    return `Veo la seccion de importar archivo. Archivo: **${A4.fileName}**. Puntos: **${A4.points.length}**. Rectangulos: **${selection.segments}**. Area aproximada: **${A4.points.length >= 3 ? fmt(selection.area, 3) : "0"} cm²**.`;
-  }
-  if (section === "games") {
-    return `Veo Juegos. ${gameSolutionText()} Puntaje: **${GAME_STATE.score}/${GAME_STATE.answered}**.`;
-  }
-  const input = STATE.input || readInputs();
-  return `Veo la suma de Riemann. La funcion actual es: \`f(x)=${linearExpr(input.expr)}\`. Intervalo: [${fmt(input.a)}, ${fmt(input.b)}], con **${input.manualN}** rectangulos y metodo **${methodLabel(input.method)}**.`;
-}
-
-function valueLine(value, label = "Resultado") {
-  if (!Number.isFinite(value)) return `${label}: sin valor numerico.`;
-  const fraction = fractionApproxText(value, 10000, 1e-7);
-  return fraction
-    ? `${label}: ${fmt(value, 8)} en decimal; fraccion aprox. ${fraction}.`
-    : `${label}: ${fmt(value, 8)} en decimal.`;
-}
-
-function riemannFormulaText(method) {
-  if (method === "left") return "x_i* = a + (i - 1)*Delta x";
-  if (method === "right") return "x_i* = a + i*Delta x";
-  return "x_i* = a + (i - 1/2)*Delta x";
-}
-
-function currentRiemannSnapshot() {
-  const input = readInputs();
-  const sameInput = STATE.input
-    && STATE.input.expr === input.expr
-    && STATE.input.a === input.a
-    && STATE.input.b === input.b
-    && STATE.input.n === input.n
-    && STATE.input.method === input.method;
-  if (sameInput && STATE.fn && STATE.data) {
-    return { input, fn: STATE.fn, data: STATE.data, exact: STATE.exact, areas: STATE.areas, integral: STATE.integral };
-  }
-  return computeRiemann(input);
-}
-
-function buildRiemannSolutionText() {
-  try {
-    const { input, data, exact, areas, integral } = currentRiemannSnapshot();
-    const first = data.rects[0];
-    const infinite = $("infinityInput")?.checked;
-    const visibleN = infinite ? "n -> infinito" : String(input.manualN);
-    const finiteIntegral = Number.isFinite(exact);
-    const error = Math.abs((infinite ? exact : data.sum) - exact);
-    const lines = [
-      "Solucion dinamica de la suma de Riemann:",
-      `Funcion: f(x)=${linearExpr(input.expr)}.`,
-      `Intervalo: [${fmt(input.a)}, ${fmt(input.b)}]. Rectangulos: ${visibleN}. Metodo: ${methodLabel(input.method)}.`,
-      `Formula usada: Delta x = (b - a)/n y ${riemannFormulaText(input.method)}.`,
-      `Delta x = (${fmt(input.b)} - (${fmt(input.a)}))/${infinite ? "n" : input.manualN} = ${fmt(data.dx)}.`,
-      `Primer rectangulo: [${fmt(first.p)}, ${fmt(first.q)}], x_1* = ${fmt(first.sample)}, f(x_1*) = ${fmt(first.y)}, area_1 = ${fmt(first.area)}.`,
-      valueLine(infinite ? exact : data.sum, "Suma")
-    ];
-    if (finiteIntegral) {
-      lines.push(valueLine(exact, "Integral de referencia"), `Error: ${fmt(error, 8)}.`);
-      lines.push(`Area positiva: ${fmt(areas.pos, 8)}. Area negativa: ${fmt(areas.neg, 8)}. Area total: ${fmt(areas.total, 8)}.`);
-    }
-    const note = integralStatusMessage(integral || {});
-    if (note) lines.push(`Diagnostico: ${note}`);
-    return lines.join("\n");
-  } catch (error) {
-    return `No pude resolver la suma de Riemann: ${error.message}`;
-  }
-}
-
-function linearRuleFormula(rule) {
-  const cleanRule = normalizeQueryText(rule);
-  if (cleanRule.includes("fracciones parciales")) return "P(x)/Q(x) = A/(x - r1) + B/(x - r2) + ...; integral k/(x - r) dx = k*ln(abs(x - r)) + C";
-  if (cleanRule.includes("por partes")) return "integral u dv = u*v - integral v du";
-  if (cleanRule.includes("cambio de variable lineal")) return "integral f(a*x + b) dx = F(a*x + b)/a + C";
-  if (cleanRule.includes("cambio de variable")) return "integral f(g(x))*g'(x) dx = F(g(x)) + C";
-  if (cleanRule.includes("arcotangente")) return "integral 1/(1 + x^2) dx = atan(x) + C";
-  if (cleanRule.includes("logaritmica")) return "integral u'/u dx = ln(abs(u)) + C";
-  if (cleanRule.includes("trigonometric")) return "integral sin(x) dx = -cos(x) + C; integral cos(x) dx = sin(x) + C";
-  if (cleanRule.includes("exponencial")) return "integral exp(x) dx = exp(x) + C";
-  if (cleanRule.includes("numerica")) return "Gauss-Kronrod adaptativo: suma ponderada de f en nodos que se refinan donde el error es mayor";
-  return "integral x^n dx = x^(n + 1)/(n + 1) + C, con n != -1";
-}
-
-function buildIntegralSolutionText() {
-  const expr = $("integralExpr")?.value || "";
-  const aText = $("integralA")?.value.trim() || "";
-  const bText = $("integralB")?.value.trim() || "";
-
-  let solution;
-  try {
-    solution = solveIntegral(expr, aText && bText ? aText : "", aText && bText ? bText : "");
-  } catch (error) {
-    return `No pude resolver la integral: ${error.message}`;
-  }
-
-  const lines = ["Solucion dinamica de la integral:", `Integrando: ${linearExpr(expr)}.`];
-  if (solution.anti) {
-    const rule = solution.rules.join(" + ");
-    lines.push(`Formula usada: ${linearRuleFormula(rule)}.`, `Regla detectada: ${rule}.`);
-    if (solution.partial) lines.push(`Fraccion parcial: ${linearExpr(solution.partial.dec)}.`);
-    lines.push(`Antiderivada: F(x) = ${linearExpr(solution.anti)} + C (verificada: F'(x) = f(x)).`);
-  } else {
-    lines.push(`${solution.symbolicError}`);
-  }
-
-  const d = solution.definite;
-  if (d) {
-    if (d.method === "symbolic") lines.push(`Evaluacion exacta: F(${fmt(d.b)}) - F(${fmt(d.a)}).`);
-    else if (Number.isFinite(d.value)) lines.push(`Formula usada: ${linearRuleFormula(RULE_NUMERIC_LABEL)}.`);
-    if (d.message) lines.push(`Diagnostico: ${d.message}`);
-    if (Number.isFinite(d.value)) lines.push(valueLine(d.value, "Integral definida"));
-  } else {
-    lines.push("Decimal: sin limites definidos. Si colocas a y b, calculo el valor decimal.");
-  }
-
-  if (solution.partial?.steps?.length) {
-    lines.push("Procedimiento:");
-    solution.partial.steps.forEach((step, index) => {
-      lines.push(`${index + 1}. ${step.label}: ${step.desc}`);
-    });
-  } else if (solution.anti) {
-    lines.push("Procedimiento: identificar la regla, integrar termino a termino y sumar la constante C.");
-  }
-  return lines.join("\n");
-}
-
-function buildImportSolutionText() {
-  const selection = getA4Selection();
-  const points = A4.points
-    .slice(0, 6)
-    .map((point, index) => {
-      const cm = pointToCm(point);
-      return `P${index + 1}=(${fmt(cm.x, 2)}, ${fmt(cm.y, 2)}) cm`;
-    })
-    .join("; ");
-  const suffix = A4.points.length > 6 ? "; ..." : "";
-  return [
-    "Solucion del area seleccionada en hoja A4:",
-    `Archivo: ${A4.fileName}.`,
-    `Puntos: ${A4.points.length}${points ? ` (${points}${suffix})` : ""}.`,
-    "Metodo: rectangulos verticales con punto medio dentro del contorno.",
-    `Rectangulos formados: ${selection.segments}.`,
-    valueLine(A4.points.length >= 3 ? selection.area : NaN, "Area aproximada en cm^2"),
-    "Si un punto cae fuera de lugar, quita el ultimo punto o limpia la hoja y vuelve a marcar el contorno en orden."
-  ].join("\n");
-}
-
-function localDirectReply(question, section = currentHelpSection()) {
-  const q = normalizeQueryText(question);
-  if (isGreeting(question)) return "Hola, ¿en qué te puedo ayudar?";
-  if (/\b(que ves|que hay|contexto|resumen)\b/.test(q)) return sectionSnapshotReply(section);
-  if (/\b(resuelve|resolver|solucion|soluciona|procedimiento|pasos|calcula|calcular|resultado|desarrolla|photomath|photomatch)\b/.test(q)) {
-    if (section === "integrals") return buildIntegralSolutionText();
-    if (section === "import") return buildImportSolutionText();
-    if (section === "games") return gameSolutionText();
-    return buildRiemannSolutionText();
-  }
-  if (/(escribe|esbribe|dime|muestra|pon|cual es|cual)\b/.test(q) && /(funcion|integrando|ecuacion|f x|fx)\b/.test(q)) {
-    if (section === "integrals") {
-      const expr = $("integralExpr")?.value || "";
-      return `El integrando actual es: \`${linearExpr(expr)}\``;
-    }
-    const input = STATE.input || readInputs();
-    return `La funcion actual es: \`f(x)=${linearExpr(input.expr)}\``;
-  }
-  return "";
-}
-
-function repeatedWordRatio(text) {
-  const words = String(text || "").toLowerCase().match(/[a-záéíóúñü]{2,}/gi) || [];
-  if (words.length < 18) return 0;
-  const repeated = words.filter((word, index) => index > 0 && word === words[index - 1]).length;
-  const common = new Map();
-  for (const word of words) common.set(word, (common.get(word) || 0) + 1);
-  const top = Math.max(...common.values());
-  return Math.max(repeated / words.length, top / words.length);
-}
-
-function looksLikeBadAiResponse(text) {
-  const value = String(text || "").trim();
-  if (!value) return true;
-  if (value.length > 1800) return true;
-  if (repeatedWordRatio(value) > 0.22) return true;
-  if ((value.match(/\b(?:19|20)\d{2}\b/g) || []).length > 2) return true;
-  if (/(\.[a-z0-9]{2,},?){3,}/i.test(value)) return true;
-  if (/\b(Mishima|Vampirella|VKING|eker)\b/i.test(value)) return true;
-  if (/[一-龥ぁ-んァ-ンА-Яа-я]/.test(value) && !/[áéíóúñ¿¡]/i.test(value)) return true;
-  if (/(the financial|directFor|tolkFor|undefined|null){2,}/i.test(value)) return true;
-  const spanishHints = value.match(/\b(el|la|los|las|un|una|que|para|con|por|integral|riemann|area|funcion|hola|puedo|ayudar|paso)\b/gi) || [];
-  const latinWords = value.match(/[a-záéíóúñü]{2,}/gi) || [];
-  if (/\b(Refining|Final Answer|analysis|assistant|We need|Let's|Therefore|Solution)\b/i.test(value) && spanishHints.length < 2) return true;
-  if (latinWords.length > 4 && spanishHints.length === 0 && !/[=+\-*/∫Σ\\]/.test(value)) return true;
-  return latinWords.length > 25 && spanishHints.length < 2;
-}
-
-function usableAiResponse(answer) {
-  return looksLikeBadAiResponse(answer) ? "" : String(answer).trim();
-}
-
-function inferAiProvider(config) {
-  const endpoint = (config.endpoint || "").toLowerCase();
-  const model = (config.model || "").toLowerCase();
-  if (config.provider) return config.provider;
-  if (endpoint.includes("/responses")) return "openai-responses";
-  if (endpoint.includes("generativelanguage.googleapis.com") || model.includes("gemini")) return "gemini";
-  if (endpoint.includes("anthropic") || model.includes("claude")) return "anthropic";
-  return "openai-compatible";
-}
-
-function getAiConfig() {
-  let config = {};
-  try { config = JSON.parse(localStorage.getItem(AI_CONFIG_KEY) || "{}"); } catch (_) {}
-  for (const key of LEGACY_AI_CONFIG_KEYS) {
-    if (config.endpoint || config.apiKey || config.model) break;
-    try { config = JSON.parse(localStorage.getItem(key) || "{}"); } catch (_) {}
-  }
-  return { ...config, provider: inferAiProvider(config) };
-}
-
-function extractAiText(data) {
-  if (typeof data?.output_text === "string") return data.output_text;
-  const responseText = (data?.output || []).flatMap(item => item.content || [])
-    .map(part => part.text || part.input_text || "")
-    .filter(Boolean)
-    .join("\n");
-  if (responseText) return responseText;
-  const chatText = data?.choices?.[0]?.message?.content;
-  if (Array.isArray(chatText)) return chatText.map(part => part.text || part.content || "").join("\n");
-  if (typeof chatText === "string") return chatText;
-  const geminiText = (data?.candidates?.[0]?.content?.parts || [])
-    .map(part => part.text || "")
-    .filter(Boolean)
-    .join("\n");
-  if (geminiText) return geminiText;
-  const anthropicText = data?.content?.map(part => part.text || "").filter(Boolean).join("\n");
-  return anthropicText || "";
-}
-
-function numberFromInput(id, fallback) {
-  const value = Number($(id)?.value);
-  return Number.isFinite(value) ? value : fallback;
-}
-
-function friendlyApiError(error) {
-  const message = String(error?.message || error || "");
-  if (/401|Unauthorized|Authentication failed/i.test(message)) {
-    return "API key inválida, vencida o copiada con espacios. Genera una key nueva y vuelve a guardarla.";
-  }
-  if (/403|Forbidden/i.test(message)) {
-    return "La key no tiene permiso para ese modelo o proveedor.";
-  }
-  if (/404|not found/i.test(message)) {
-    return "Endpoint o modelo no encontrado. Revisa la URL y el nombre exacto del modelo.";
-  }
-  if (/CORS|Failed to fetch/i.test(message)) {
-    return "El navegador bloqueó la llamada directa; usa el servidor local con proxy en 127.0.0.1:5174.";
-  }
-  return message;
-}
-
-function aiProviderLabel(config = getAiConfig()) {
-  const provider = inferAiProvider(config);
-  const labels = {
-    "openai-compatible": "OpenAI compatible / NVIDIA",
-    gemini: "Gemini",
-    anthropic: "Anthropic",
-    "openai-responses": "OpenAI Responses",
-    custom: "endpoint propio"
-  };
-  return labels[provider] || provider || "IA";
-}
-
-function hasUnifiedAiConfig(config = getAiConfig()) {
-  return Boolean(config.apiKey && config.endpoint && config.model);
-}
-
-function updateUnifiedAiIndicators() {
-  const config = getAiConfig();
-  const sectionProvider = $("sectionAiProvider");
-  if (!sectionProvider) return;
-  sectionProvider.textContent = hasUnifiedAiConfig(config)
-    ? `IA unica del Asistente: ${aiProviderLabel(config)}`
-    : "Configura la IA unica en Asistente";
-}
-
-function buildSectionAiContext(section) {
-  if (section === "import") {
-    const selection = getA4Selection();
-    return [
-      "Contexto actual de Importar archivo:",
-      `Archivo: ${A4.fileName}.`,
-      `Puntos marcados: ${A4.points.length}.`,
-      `Rectangulos por punto medio: ${selection.segments}.`,
-      `Area aproximada: ${A4.points.length >= 3 ? fmt(selection.area, 3) : "0"} cm2.`,
-      `Escala: hoja A4 de ${A4.widthCm} x ${A4.heightCm} cm.`,
-      "Solucion local:",
-      buildImportSolutionText()
-    ].join("\n");
-  }
-
-  if (section === "integrals") {
-    return [
-      "Contexto actual de Calculadora de integrales:",
-      `Integrando: ${$("integralExpr")?.value || ""}.`,
-      `Limite a: ${$("integralA")?.value || "indefinido"}.`,
-      `Limite b: ${$("integralB")?.value || "indefinido"}.`,
-      `Resumen: ${$("solverSummary")?.textContent?.trim() || "sin resumen"}.`,
-      `Resultado visible: ${$("integralResult")?.textContent?.trim() || "sin resultado"}.`,
-      "Solucion local:",
-      buildIntegralSolutionText()
-    ].join("\n");
-  }
-
-  if (section === "games") {
-    return [
-      "Contexto actual de Juegos:",
-      gameSolutionText(),
-      `Puntaje: ${GAME_STATE.score}/${GAME_STATE.answered}.`
-    ].join("\n");
-  }
-
-  const input = STATE.input || readInputs();
-  return [
-    "Contexto actual de Suma de Riemann:",
-    `Funcion: f(x)=${input.expr}.`,
-    `Intervalo: [${input.a}, ${input.b}].`,
-    `n: ${input.n}.`,
-    `Metodo: ${input.method}.`,
-    `Suma: ${$("metricSum")?.textContent || "0"}.`,
-    `Integral aproximada: ${$("metricIntegral")?.textContent || "0"}.`,
-    `Error: ${$("metricError")?.textContent || "0"}.`,
-    "Solucion local:",
-    buildRiemannSolutionText()
-  ].join("\n");
-}
-
-function buildUnifiedAiQuestion(question, section = currentHelpSection()) {
-  return `${buildSectionAiContext(section)}\n\nPregunta del usuario: ${question}`;
-}
-
-async function askAi(question, systemPrompt, runtime = {}) {
-  const config = getAiConfig();
-  if (!config.apiKey || !config.endpoint || !config.model) {
-    return null;
-  }
-  if (runtime.maxTokens) {
-    const configuredTokens = Number(config.maxTokens);
-    config.maxTokens = Math.min(Number.isFinite(configuredTokens) ? configuredTokens : runtime.maxTokens, runtime.maxTokens);
-  }
-  if (runtime.temperature !== undefined) {
-    const configuredTemperature = Number(config.temperature);
-    config.temperature = Math.min(Number.isFinite(configuredTemperature) ? configuredTemperature : runtime.temperature, runtime.temperature);
-  }
-  if (runtime.topP !== undefined) {
-    const configuredTopP = Number(config.topP);
-    config.topP = Math.min(Number.isFinite(configuredTopP) ? configuredTopP : runtime.topP, runtime.topP);
-  }
-
-  const provider = inferAiProvider(config);
-  if (["127.0.0.1", "localhost"].includes(location.hostname)) {
-    try {
-      const proxyResponse = await fetch("/api/ai", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...config, provider, question, systemPrompt })
-      });
-      if (proxyResponse.ok) {
-        const proxyData = await proxyResponse.json();
-        if (proxyData.text) return proxyData.text;
-        if (proxyData.error) throw new Error(proxyData.error);
-      } else if (proxyResponse.status !== 404 && proxyResponse.status !== 405) {
-        const details = await proxyResponse.text();
-        throw new Error(details.slice(0, 180) || `Proxy local respondió ${proxyResponse.status}`);
-      }
-    } catch (error) {
-      if (!/Failed to fetch|404|405/i.test(error.message)) throw error;
-    }
-  }
-
-  let headers = { "Content-Type": "application/json" };
-  let body;
-
-  if (provider === "anthropic") {
-    headers = {
-      ...headers,
-      "x-api-key": config.apiKey,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true"
-    };
-    body = {
-      model: config.model,
-      system: systemPrompt,
-      messages: [{ role: "user", content: question }],
-      temperature: config.temperature ?? 0.2,
-      top_p: config.topP ?? 1,
-      max_tokens: config.maxTokens ?? 700
-    };
-  } else if (provider === "openai-responses") {
-    headers = { ...headers, "Authorization": `Bearer ${config.apiKey}` };
-    body = {
-      model: config.model,
-      input: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: question }
-      ],
-      temperature: config.temperature ?? 0.2,
-      top_p: config.topP ?? 1,
-      max_output_tokens: config.maxTokens ?? 700
-    };
-  } else if (provider === "gemini") {
-    headers = { ...headers, "x-goog-api-key": config.apiKey };
-    body = {
-      systemInstruction: { parts: [{ text: systemPrompt }] },
-      contents: [
-        { role: "user", parts: [{ text: question }] }
-      ],
-      generationConfig: {
-        temperature: config.temperature ?? 0.2,
-        topP: config.topP ?? 1,
-        maxOutputTokens: config.maxTokens ?? 700
-      }
-    };
-  } else {
-    headers = { ...headers, "Authorization": `Bearer ${config.apiKey}` };
-    body = {
-      model: config.model,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: question }
-      ],
-      temperature: config.temperature ?? 0.2,
-      top_p: config.topP ?? 1,
-      max_tokens: config.maxTokens ?? 700,
-      stream: false
-    };
-  }
-
-  const response = await fetch(config.endpoint, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body)
-  });
-  if (!response.ok) {
-    let details = "";
-    try { details = await response.text(); } catch (_) {}
-    throw new Error(`La API respondió ${response.status}${details ? `: ${details.slice(0, 180)}` : ""}`);
-  }
-  const data = await response.json();
-  return extractAiText(data) || "La API respondió, pero no encontré texto en la respuesta.";
-}
-
-function currentHelpSection() {
-  const section = document.querySelector(".section-tab.is-active")?.dataset.section || "riemann";
-  return SECTION_HELP[section] ? section : "riemann";
-}
-
-function addSectionHelpMessage(role, text) {
-  const box = $("sectionAiMessages");
-  if (!box) return;
-  const div = document.createElement("div");
-  div.className = `chat-message ${role}`;
-  setRenderedMessage(div, text);
-  box.appendChild(div);
-  box.scrollTop = box.scrollHeight;
-}
-
-function updateSectionAiHelp() {
-  const section = document.querySelector(".section-tab.is-active")?.dataset.section || "riemann";
-  const root = $("sectionAiHelp");
-  if (!root) return;
-  root.classList.toggle("is-hidden", section === "assistant");
-  if (section === "assistant") return;
-
-  const key = currentHelpSection();
-  const help = SECTION_HELP[key];
-  $("sectionAiTitle").textContent = help.title;
-  $("sectionAiHint").textContent = help.hint;
-  updateUnifiedAiIndicators();
-
-  const messages = $("sectionAiMessages");
-  if (messages && messages.dataset.section !== key) {
-    messages.dataset.section = key;
-    messages.innerHTML = "";
-    addSectionHelpMessage("bot", help.hint);
-  }
-}
-
-function localSectionHelpReply(question) {
-  const key = currentHelpSection();
-  const help = SECTION_HELP[key];
-  if (/formula|render|ecuaci|latex/i.test(question)) return "Para el asistente uso formato lineal: fracciones como 3/2 y expresiones ambiguas entre parentesis, por ejemplo (x + 5)/(x^2 + 3*x + 2).";
-  if (/area|punto|pdf|imagen/i.test(question)) return SECTION_HELP.import.reply;
-  if (/riemann|rect|tabla|suma/i.test(question)) return SECTION_HELP.riemann.reply;
-  if (/integral|fracci|decimal|primitiva/i.test(question)) return SECTION_HELP.integrals.reply;
-  if (/juego|burbuja|derivada|metodo/i.test(question)) return gameSolutionText();
-  return help.reply;
-}
-
-async function sendSectionHelpMessage() {
-  const input = $("sectionAiInput");
-  const question = input.value.trim();
-  if (!question) return;
-  input.value = "";
-  addSectionHelpMessage("user", question);
-  const requestId = ++sectionAiRequestId;
-
-  const key = currentHelpSection();
-  const direct = localDirectReply(question, key);
-  if (direct) {
-    addSectionHelpMessage("bot", direct);
-    return;
-  }
-
-  try {
-    const answer = await askAi(buildUnifiedAiQuestion(question, key), "Eres la unica IA configurada desde el panel Asistente de Yos_Sphere. Usa el contexto de la seccion activa y responde solo en espanol claro, directo y con pasos cortos. Escribe las matematicas en formato lineal: usa 3/2, (x + 5)/(x^2 + 3*x + 2) y parentesis solo cuando eviten ambiguedad. No uses LaTeX ni fracciones verticales.", { maxTokens: 700, temperature: 0.2, topP: 0.8 });
-    if (requestId !== sectionAiRequestId) return;
-    addSectionHelpMessage("bot", usableAiResponse(answer) || localSectionHelpReply(question));
-  } catch (error) {
-    if (requestId !== sectionAiRequestId) return;
-    addSectionHelpMessage("bot", `${localSectionHelpReply(question)} No pude conectar con la API: ${friendlyApiError(error)}`);
-  }
-}
-
-async function sendChatMessage() {
-  const input = $("chatInput");
-  const question = input.value.trim();
-  if (!question) return;
-  input.value = "";
-  addChatMessage("user", question);
-  const requestId = ++chatRequestId;
-
-  const key = currentHelpSection();
-  const direct = localDirectReply(question, key);
-  if (direct) {
-    addChatMessage("bot", direct);
-    return;
-  }
-
-  try {
-    const answer = await askAi(buildUnifiedAiQuestion(question, key), "Eres la unica IA configurada desde el panel Asistente de Yos_Sphere. Responde solo en espanol claro, breve y paso a paso. Escribe las matematicas en formato lineal: usa 3/2, (x + 5)/(x^2 + 3*x + 2) y parentesis solo cuando eviten ambiguedad. No uses LaTeX ni fracciones verticales.", { maxTokens: 900, temperature: 0.2, topP: 0.8 });
-    if (requestId !== chatRequestId) return;
-    addChatMessage("bot", usableAiResponse(answer) || localAssistantReply(question));
-  } catch (error) {
-    if (requestId !== chatRequestId) return;
-    addChatMessage("bot", `${localAssistantReply(question)} No pude conectar con la API: ${friendlyApiError(error)}`);
-  }
-}
-
-function loadNvidiaConfig() {
-  try {
-    const config = getAiConfig();
-    if (!config.endpoint && !config.apiKey && !config.model) return;
-    $("aiProviderInput").value = inferAiProvider(config);
-    $("nvidiaEndpointInput").value = config.endpoint || $("nvidiaEndpointInput").value;
-    $("nvidiaApiKeyInput").value = config.apiKey || "";
-    $("nvidiaModelInput").value = config.model || $("nvidiaModelInput").value;
-    $("aiMaxTokensInput").value = config.maxTokens || $("aiMaxTokensInput").value;
-    $("aiTemperatureInput").value = config.temperature ?? $("aiTemperatureInput").value;
-    $("aiTopPInput").value = config.topP ?? $("aiTopPInput").value;
-    $("nvidiaConfigStatus").textContent = config.apiKey
-      ? `IA unica cargada desde Asistente (${aiProviderLabel(config)}).`
-      : "Endpoint y modelo cargados. Falta la API key unica.";
-    updateUnifiedAiIndicators();
-  } catch (_) {
-    $("nvidiaConfigStatus").textContent = "No se pudo leer la configuración local.";
-  }
-}
-
-function saveNvidiaConfig() {
-  const config = {
-    provider: $("aiProviderInput").value,
-    endpoint: $("nvidiaEndpointInput").value.trim(),
-    apiKey: $("nvidiaApiKeyInput").value.trim(),
-    model: $("nvidiaModelInput").value.trim(),
-    maxTokens: numberFromInput("aiMaxTokensInput", 2048),
-    temperature: numberFromInput("aiTemperatureInput", 0.2),
-    topP: numberFromInput("aiTopPInput", 1)
-  };
-  try {
-    localStorage.setItem(AI_CONFIG_KEY, JSON.stringify(config));
-  } catch (_) {
-    $("nvidiaConfigStatus").textContent = "El navegador no permite guardar la configuración en este equipo.";
-    return;
-  }
-  $("nvidiaConfigStatus").textContent = config.apiKey
-    ? `IA unica guardada (${aiProviderLabel(config)}). Asistente y secciones usan esta misma API.`
-    : "Guarde endpoint/modelo. Falta la API key unica.";
-  updateUnifiedAiIndicators();
-}
-
-function clearNvidiaConfig() {
-  try {
-    localStorage.removeItem(AI_CONFIG_KEY);
-    LEGACY_AI_CONFIG_KEYS.forEach(key => localStorage.removeItem(key));
-  } catch (_) {}
-  $("nvidiaApiKeyInput").value = "";
-  $("aiMaxTokensInput").value = "2048";
-  $("aiTemperatureInput").value = "0.2";
-  $("aiTopPInput").value = "1";
-  $("nvidiaConfigStatus").textContent = "IA unica borrada. Configurala desde Asistente.";
-  updateUnifiedAiIndicators();
-}
-
-function applyProviderDefaults() {
-  const provider = $("aiProviderInput").value;
-  const endpointInput = $("nvidiaEndpointInput");
-  const modelInput = $("nvidiaModelInput");
-  if (provider === "anthropic") {
-    endpointInput.value = "https://api.anthropic.com/v1/messages";
-    if (!modelInput.value || modelInput.value.includes("/") || modelInput.value.startsWith("gpt")) modelInput.value = "claude-3-5-sonnet-latest";
-  } else if (provider === "openai-responses") {
-    endpointInput.value = "https://api.openai.com/v1/responses";
-    if (!modelInput.value || modelInput.value.startsWith("claude")) modelInput.value = "gpt-4.1-mini";
-  } else if (provider === "gemini") {
-    endpointInput.value = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
-    modelInput.value = "gemini-2.0-flash";
-  } else if (provider === "openai-compatible" && !endpointInput.value) {
-    endpointInput.value = "https://integrate.api.nvidia.com/v1/chat/completions";
-  }
-}
-
-async function testAiConfig() {
-  saveNvidiaConfig();
-  $("nvidiaConfigStatus").textContent = "Probando API...";
-  try {
-    const answer = await askAi("Responde solamente: OK", "Responde exactamente OK si la conexión funciona.", { maxTokens: 16, temperature: 0, topP: 0.1 });
-    $("nvidiaConfigStatus").textContent = `Conexión correcta: ${String(answer || "OK").slice(0, 80)}`;
-  } catch (error) {
-    $("nvidiaConfigStatus").textContent = `Error de API: ${friendlyApiError(error)}`;
-  }
-}
 
 function bindEvents() {
-  document.querySelectorAll(".section-tab").forEach(tab => tab.addEventListener("click", () => switchMainSection(tab.dataset.section)));
+  document.querySelectorAll(".section-tab").forEach(tab => tab.addEventListener("click", () => goToSection(tab.dataset.section)));
+  document.querySelectorAll("[data-go]").forEach(card => card.addEventListener("click", () => goToSection(card.dataset.go)));
+  $("homeBtn")?.addEventListener("click", goHome);
+  window.addEventListener("hashchange", route);
+  window.addEventListener("popstate", route);
   document.querySelectorAll(".tab").forEach(tab => tab.addEventListener("click", () => switchTab(tab.dataset.t)));
   document.querySelectorAll(".stab").forEach(tab => tab.addEventListener("click", () => switchSub(tab.dataset.st)));
 
@@ -2424,31 +1652,6 @@ function bindEvents() {
   $("gameNextBtn").addEventListener("click", nextGame);
   $("gameResetBtn").addEventListener("click", resetGame);
 
-  document.querySelectorAll(".assistant-prompt").forEach(btn => {
-    btn.addEventListener("click", () => updateAssistant(btn.dataset.assistantPrompt));
-  });
-  $("assistantSettingsBtn").addEventListener("click", () => {
-    $("assistantSettingsPanel").classList.toggle("show");
-  });
-  $("saveNvidiaConfigBtn").addEventListener("click", saveNvidiaConfig);
-  $("testAiConfigBtn").addEventListener("click", testAiConfig);
-  $("clearNvidiaConfigBtn").addEventListener("click", clearNvidiaConfig);
-  $("aiProviderInput").addEventListener("change", applyProviderDefaults);
-  $("chatSendBtn").addEventListener("click", sendChatMessage);
-  $("chatInput").addEventListener("keydown", event => {
-    if (event.key === "Enter") sendChatMessage();
-  });
-  $("sectionAiToggle").addEventListener("click", () => {
-    updateSectionAiHelp();
-    $("sectionAiHelp").classList.toggle("is-open");
-  });
-  $("sectionAiClose").addEventListener("click", () => {
-    $("sectionAiHelp").classList.remove("is-open");
-  });
-  $("sectionAiSend").addEventListener("click", sendSectionHelpMessage);
-  $("sectionAiInput").addEventListener("keydown", event => {
-    if (event.key === "Enter") sendSectionHelpMessage();
-  });
 
   const redrawForTheme = () => {
     if (STATE.input) drawGraph(STATE.input);
@@ -2464,325 +1667,19 @@ function bindEvents() {
   });
 }
 
-// ─── Modal de bienvenida / configuración de IA ────────────────────────────────
-function buildWelcomeModal() {
-  if (document.getElementById("aiWelcomeModal")) return;
-  const modal = document.createElement("div");
-  modal.id = "aiWelcomeModal";
-  modal.innerHTML = `
-<div class="wm-overlay" id="aiWmOverlay">
-  <div class="wm-card">
-    <div class="wm-header">
-      <span class="wm-icon brand-mark" aria-hidden="true"></span>
-      <div>
-        <strong>Asistente de Yos_Sphere</strong>
-        <p>Configura tu API de IA preferida para activar el asistente de forma global.</p>
-      </div>
-    </div>
-    <div class="wm-body">
-      <div class="wm-step">
-        <span class="wm-num">1</span>
-        <div>
-          <b>Elige tu proveedor de IA</b>
-          <select id="wmProviderSelect" class="wm-input" style="cursor:pointer; margin-top:0.35rem;">
-            <option value="gemini" selected>Google Gemini 2.0 Flash (Gratis)</option>
-            <option value="nvidia-deepseek-r1">NVIDIA NIM · DeepSeek R1</option>
-            <option value="nvidia-deepseek-v3">NVIDIA NIM · DeepSeek V3</option>
-            <option value="openai">OpenAI · GPT-4o mini</option>
-            <option value="anthropic">Anthropic · Claude 3.5 Sonnet</option>
-            <option value="custom">Personalizado (OpenAI compatible)</option>
-          </select>
-        </div>
-      </div>
-      <div class="wm-step">
-        <span class="wm-num">2</span>
-        <div>
-          <b id="wmStep2Title">Obtén tu key gratuita</b>
-          <p id="wmStep2Desc">Ve a <a id="wmKeyLink" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio → API keys</a> y crea una key gratuita (no necesitas tarjeta).</p>
-        </div>
-      </div>
-      <div class="wm-step">
-        <span class="wm-num">3</span>
-        <div>
-          <b>Pégala aquí abajo</b>
-          <input id="wmApiKeyInput" type="text" placeholder="AIza..." spellcheck="false" autocomplete="off" class="wm-input">
-        </div>
-      </div>
-      
-      <!-- Collapsible Advanced settings -->
-      <div style="display: flex; justify-content: flex-end; margin-top: -0.2rem; margin-bottom: -0.2rem;">
-        <button id="wmToggleAdvanced" type="button" style="background: none; border: none; color: var(--accent, #7c3aed); font-size: 0.78rem; cursor: pointer; text-decoration: underline; padding: 0.2rem 0.5rem;">Mostrar opciones avanzadas</button>
-      </div>
-      
-      <div id="wmAdvancedSection" style="display: none; border-top: 1px dashed var(--border, rgba(255,255,255,0.1)); padding-top: 0.8rem; margin-top: 0.2rem; flex-direction: column; gap: 0.8rem;">
-        <div>
-          <b style="font-size: 0.82rem; color: var(--text, #f1f5f9); display: block; margin-bottom: 0.2rem;">Endpoint</b>
-          <input id="wmEndpointInput" type="text" class="wm-input" style="font-size:0.75rem;" spellcheck="false">
-        </div>
-        <div>
-          <b style="font-size: 0.82rem; color: var(--text, #f1f5f9); display: block; margin-bottom: 0.2rem;">Modelo</b>
-          <input id="wmModelInput" type="text" class="wm-input" style="font-size:0.75rem;" spellcheck="false">
-        </div>
-      </div>
-      
-      <div id="wmStatus" class="wm-status"></div>
-    </div>
-    <div class="wm-footer">
-      <button id="wmSaveBtn" class="text-btn primary" type="button">Guardar y activar IA</button>
-      <button id="wmSkipBtn" class="text-btn" type="button">Ahora no</button>
-    </div>
-  </div>
-</div>`;
-  document.body.appendChild(modal);
-
-  const presets = {
-    "gemini": {
-      provider: "gemini",
-      endpoint: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
-      model: "gemini-2.0-flash",
-      placeholder: "AIza...",
-      title: "Obtén tu key gratuita",
-      link: "https://aistudio.google.com/apikey",
-      linkLabel: "Google AI Studio → API keys",
-      desc: "Ve a $LINK y crea una key gratuita (no necesitas tarjeta de crédito)."
-    },
-    "nvidia-deepseek-r1": {
-      provider: "openai-compatible",
-      endpoint: "https://integrate.api.nvidia.com/v1/chat/completions",
-      model: "deepseek-ai/deepseek-r1",
-      placeholder: "nvapi-...",
-      title: "Obtén tu key de NVIDIA NIM",
-      link: "https://build.nvidia.com/deepseek/deepseek-r1",
-      linkLabel: "NVIDIA Build → DeepSeek R1",
-      desc: "Inicia sesión en $LINK para generar tu API key (incluye créditos gratis de DeepSeek R1)."
-    },
-    "nvidia-deepseek-v3": {
-      provider: "openai-compatible",
-      endpoint: "https://integrate.api.nvidia.com/v1/chat/completions",
-      model: "deepseek-ai/deepseek-v3",
-      placeholder: "nvapi-...",
-      title: "Obtén tu key de NVIDIA NIM",
-      link: "https://build.nvidia.com/deepseek/deepseek-v3",
-      linkLabel: "NVIDIA Build → DeepSeek V3",
-      desc: "Inicia sesión en $LINK para generar tu API key (incluye créditos gratis de DeepSeek V3)."
-    },
-    "openai": {
-      provider: "openai-compatible",
-      endpoint: "https://api.openai.com/v1/chat/completions",
-      model: "gpt-4o-mini",
-      placeholder: "sk-proj-...",
-      title: "Obtén tu key de OpenAI",
-      link: "https://platform.openai.com/api-keys",
-      linkLabel: "OpenAI Platform → API keys",
-      desc: "Ve a $LINK y crea una API key. Requiere saldo precargado."
-    },
-    "anthropic": {
-      provider: "anthropic",
-      endpoint: "https://api.anthropic.com/v1/messages",
-      model: "claude-3-5-sonnet-latest",
-      placeholder: "sk-ant-...",
-      title: "Obtén tu key de Anthropic",
-      link: "https://console.anthropic.com/settings/keys",
-      linkLabel: "Anthropic Console → API keys",
-      desc: "Ve a $LINK y crea una API key. Requiere saldo precargado."
-    },
-    "custom": {
-      provider: "openai-compatible",
-      endpoint: "https://integrate.api.nvidia.com/v1/chat/completions",
-      model: "deepseek-ai/deepseek-r1",
-      placeholder: "Tu API key personalizada...",
-      title: "Configura tu API personalizada",
-      link: "https://build.nvidia.com/",
-      linkLabel: "Panel de API",
-      desc: "Ve a $LINK o al sitio de tu proveedor para obtener la key. Edita endpoint y modelo abajo."
-    }
-  };
-
-  const overlay = modal.querySelector("#aiWmOverlay");
-  const status  = modal.querySelector("#wmStatus");
-  const keyInput = modal.querySelector("#wmApiKeyInput");
-  const providerSelect = modal.querySelector("#wmProviderSelect");
-  const step2Title = modal.querySelector("#wmStep2Title");
-  const step2Desc = modal.querySelector("#wmStep2Desc");
-  const advancedSection = modal.querySelector("#wmAdvancedSection");
-  const endpointInput = modal.querySelector("#wmEndpointInput");
-  const modelInput = modal.querySelector("#wmModelInput");
-  const toggleAdvancedBtn = modal.querySelector("#wmToggleAdvanced");
-
-  function updateUiForProvider() {
-    const key = providerSelect.value;
-    const preset = presets[key];
-    if (!preset) return;
-    
-    step2Title.textContent = preset.title;
-    
-    const linkHtml = `<a href="${preset.link}" target="_blank" rel="noopener">${preset.linkLabel}</a>`;
-    step2Desc.innerHTML = preset.desc.replace("$LINK", linkHtml);
-    
-    keyInput.placeholder = preset.placeholder;
-    endpointInput.value = preset.endpoint;
-    modelInput.value = preset.model;
-
-    if (key === "custom") {
-      advancedSection.style.display = "flex";
-      toggleAdvancedBtn.style.display = "none";
-    } else {
-      if (advancedSection.style.display !== "flex") {
-        advancedSection.style.display = "none";
-      }
-      toggleAdvancedBtn.style.display = "inline-block";
-    }
-  }
-
-  providerSelect.addEventListener("change", updateUiForProvider);
-  updateUiForProvider(); // Cargar estado inicial (Gemini)
-
-  toggleAdvancedBtn.addEventListener("click", () => {
-    if (advancedSection.style.display === "none" || advancedSection.style.display === "") {
-      advancedSection.style.display = "flex";
-      toggleAdvancedBtn.textContent = "Ocultar opciones avanzadas";
-    } else {
-      advancedSection.style.display = "none";
-      toggleAdvancedBtn.textContent = "Mostrar opciones avanzadas";
-    }
-  });
-
-  modal.querySelector("#wmSaveBtn").addEventListener("click", async () => {
-    const key = keyInput.value.trim();
-    if (!key) { 
-      status.textContent = "Pega una API key primero."; 
-      status.style.color = "var(--red, #dc2626)"; 
-      return; 
-    }
-    
-    status.textContent = "Probando conexión...";
-    status.style.color = "";
-    
-    const keyPreset = providerSelect.value;
-    const preset = presets[keyPreset];
-    
-    // Si el usuario tiene abierto el panel avanzado o es custom, tomar los valores ingresados
-    const useInputs = (keyPreset === "custom" || advancedSection.style.display === "flex");
-    const endpoint = useInputs ? endpointInput.value.trim() : preset.endpoint;
-    const model = useInputs ? modelInput.value.trim() : preset.model;
-    
-    const config = {
-      provider: preset.provider,
-      endpoint: endpoint,
-      model: model,
-      apiKey: key,
-      maxTokens: 2048,
-      temperature: 0.2,
-      topP: 1
-    };
-    
-    try { localStorage.setItem(AI_CONFIG_KEY, JSON.stringify(config)); } catch (_) {}
-    loadNvidiaConfig(); // sincronizar panel lateral del asistente
-    
-    try {
-      const answer = await askAi("Responde exactamente: OK", "Responde exactamente OK.", { maxTokens: 8, temperature: 0, topP: 0.1 });
-      if (answer && /ok/i.test(answer)) {
-        status.textContent = "✓ Conexión correcta. ¡IA activada!";
-        status.style.color = "var(--green, #16a34a)";
-        const banner = document.getElementById("noKeyBanner");
-        if (banner) banner.remove();
-        setTimeout(() => closeWelcomeModal(), 1200);
-      } else {
-        status.textContent = "API respondió pero resultado inusual. Guardado de todas formas.";
-        const banner = document.getElementById("noKeyBanner");
-        if (banner) banner.remove();
-        setTimeout(() => closeWelcomeModal(), 1500);
-      }
-    } catch (err) {
-      status.textContent = "Error: " + (err.message || "No pude conectar. Verifica la key.");
-      status.style.color = "var(--red, #dc2626)";
-    }
-  });
-
-  modal.querySelector("#wmSkipBtn").addEventListener("click", closeWelcomeModal);
-  overlay.addEventListener("click", e => { if (e.target === overlay) closeWelcomeModal(); });
-}
-
-function closeWelcomeModal() {
-  const modal = document.getElementById("aiWelcomeModal");
-  if (modal) modal.remove();
-}
-
-function maybeShowWelcomeModal() {
-  const config = getAiConfig();
-  if (config.apiKey) return; // ya tiene key configurada
-  // Solo mostrar si el usuario abre el panel de Asistente por primera vez
-  const assistantTab = document.querySelector(".section-tab[data-section='assistant']");
-  if (!assistantTab) return;
-  const originalClick = assistantTab.onclick;
-  assistantTab.addEventListener("click", function onFirstAssistantClick() {
-    buildWelcomeModal();
-    assistantTab.removeEventListener("click", onFirstAssistantClick);
-  }, { once: true });
-}
-
-// Agregar estilos del modal al <head>
-function injectWelcomeModalStyles() {
-  if (document.getElementById("wm-styles")) return;
-  const style = document.createElement("style");
-  style.id = "wm-styles";
-  style.textContent = `
-.wm-overlay{position:fixed;inset:0;background:var(--scrim);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;animation:wmFade .2s cubic-bezier(.23,1,.32,1) both}
-.wm-card{background:var(--surface);border-radius:16px;padding:24px;max-width:460px;width:100%;box-shadow:var(--shadow-pop);animation:wmIn .24s cubic-bezier(.23,1,.32,1) both}
-@keyframes wmFade{from{opacity:0}to{opacity:1}}
-@keyframes wmIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}
-.wm-header{display:flex;gap:12px;align-items:flex-start;margin-bottom:20px}
-.wm-icon{width:28px;height:28px;flex:none;margin-top:2px}
-.wm-header strong{display:block;font:700 22px/1.15 var(--display);letter-spacing:-.025em;color:var(--text)}
-.wm-header p{font-size:13px;color:var(--muted);margin:.2rem 0 0}
-.wm-body{display:flex;flex-direction:column;gap:14px}
-.wm-step{display:flex;gap:12px;align-items:flex-start}
-.wm-num{flex-shrink:0;width:22px;height:22px;border-radius:50%;background:var(--surface-2);box-shadow:inset 0 0 0 1px var(--line-2);color:var(--text);display:flex;align-items:center;justify-content:center;font:500 11px/1 var(--mono)}
-.wm-step b{display:block;font-size:13px;font-weight:600;color:var(--text);margin-bottom:.2rem}
-.wm-step p,.wm-step a{font-size:13px;color:var(--muted)}
-.wm-step a{color:var(--blue);text-decoration:underline;text-underline-offset:2px}
-.wm-input{width:100%;margin-top:.35rem;padding:8px 10px;border-radius:8px;border:0;box-shadow:0 0 0 1px var(--line-2);background:var(--surface);color:var(--text);font:13px var(--mono);outline:none}
-.wm-input:focus{box-shadow:0 0 0 1px var(--blue),0 0 0 4px var(--blue-soft)}
-.wm-status{font-size:13px;min-height:1.2em;font-weight:500}
-.wm-footer{display:flex;gap:8px;margin-top:20px;flex-wrap:wrap}
-@media (prefers-reduced-motion:reduce){.wm-overlay,.wm-card{animation:none}}
-`;
-  document.head.appendChild(style);
-}
-
-// Botón de configuración IA flotante visible cuando no hay key
-function injectNoKeyBanner() {
-  if (document.getElementById("noKeyBanner")) return;
-  const config = getAiConfig();
-  if (config.apiKey) return;
-  const banner = document.createElement("div");
-  banner.id = "noKeyBanner";
-  banner.innerHTML = `<span>El Asistente IA necesita configuración.</span><button type="button" id="noKeySetupBtn" class="text-btn primary">Configurar</button>`;
-  banner.style.cssText = "position:fixed;bottom:calc(18px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);background:var(--surface);border-radius:999px;padding:6px 6px 6px 14px;display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);z-index:900;box-shadow:var(--shadow-pop);white-space:nowrap;max-width:calc(100vw - 32px)";
-  document.body.appendChild(banner);
-  banner.querySelector("#noKeySetupBtn").addEventListener("click", () => {
-    injectWelcomeModalStyles();
-    buildWelcomeModal();
-    banner.remove();
-  });
-}
 
 function init() {
   bindEvents();
   initIcons();
   initFormulas();
   renderA4Canvas();
-  loadNvidiaConfig();
   switchTab("pTabla");
   updateAll();
   updateMathPreviews();
   solveIntegralAdvanced();
   renderGame();
-  updateSectionAiHelp();
-  injectWelcomeModalStyles();
-  maybeShowWelcomeModal();
   bindGlowCards();
-  moveNavIndicator();
+  route();
   document.fonts?.ready?.then(moveNavIndicator);
 }
 

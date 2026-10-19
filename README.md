@@ -4,7 +4,9 @@ Interfaz web educativa para visualizar sumas de Riemann, resolver integrales y t
 
 ## Funciones principales
 
-- **Suma de Riemann** con métodos izquierda, derecha y punto medio (hasta 20 000 rectángulos), tabla, fórmulas y pasos. La integral de referencia se calcula con cuadratura adaptativa de Gauss–Kronrod y avisa cuando la integral **diverge**, es **impropia** o la función **no está definida** en parte del intervalo.
+- **Menú de inicio**: al entrar se elige la sección. Cada sección tiene su propio enlace (`#riemann`, `#integrals`, `#import`, `#games`), así que el botón «atrás» del navegador vuelve al menú, y pulsar **Yos_Sphere** arriba a la izquierda también.
+
+- **Suma de Riemann** con métodos izquierda, derecha y punto medio (hasta 20 000 rectángulos), tabla, fórmulas y pasos. El botón **Animar n** recorre n = 1…500 para ver cómo la suma converge. La integral de referencia se calcula con cuadratura adaptativa de Gauss–Kronrod y avisa cuando la integral **diverge**, es **impropia** o la función **no está definida** en parte del intervalo.
 - **Calculadora de integrales** con teclado matemático:
   - Primitivas por regla de potencia, cambio de variable (lineal y general), integración por partes, fracciones parciales (denominadores hasta grado 6, raíces repetidas y factores cuadráticos), identidades trigonométricas, arcoseno/arcotangente y raíces de cuadráticas.
   - Cada primitiva se **verifica numéricamente** (F′(x) = f(x)) antes de mostrarse.
@@ -12,7 +14,6 @@ Interfaz web educativa para visualizar sumas de Riemann, resolver integrales y t
   - Si no hay primitiva elemental (por ejemplo `exp(-x^2)`), se da el valor numérico.
 - **Importar archivo**: imagen/PDF en hoja A4, marcar puntos y aproximar el área con rectángulos de punto medio; se compara con el área exacta del polígono y se avisa si el contorno se cruza.
 - **Juegos** de burbujas para reconocer métodos de integración y reglas de derivación.
-- **Asistente IA** unificado: se configura una sola API desde el panel Asistente y se reutiliza en las ayudas de cada sección. Las respuestas matemáticas usan formato lineal, por ejemplo `3/2` y `(x + 5)/(x^2 + 3*x + 2)`.
 
 ## Cómo escribir funciones
 
@@ -36,7 +37,7 @@ Los errores de escritura se explican en español y el campo afectado se marca en
 python3 riemann_ai_server.py
 ```
 
-Luego abre <http://127.0.0.1:5174/> (sirve `index.html`). El servidor solo usa la biblioteca estándar de Python.
+Luego abre <http://127.0.0.1:5174/> (sirve `index.html`). El servidor solo usa la biblioteca estándar de Python; la app también funciona abriendo `index.html` directamente.
 
 ## Pruebas
 
@@ -46,18 +47,12 @@ npm test
 
 Ejecuta `node --test` (núcleo matemático, `tests/core.test.js`) y `python3 -m unittest discover -s tests` (servidor, `tests/test_server.py`). No requieren dependencias externas ni acceso a red.
 
-## IA y claves API
-
-La aplicación acepta proveedores tipo OpenAI-compatible/NVIDIA, Gemini, Anthropic, OpenAI Responses y endpoints personalizados. El proxy local (`/api/ai`) solo acepta JSON, limita el tamaño de la petición y solo reenvía a URLs `https://` (o `http://` locales).
-
-Las claves se escriben desde la interfaz y quedan en `localStorage` del navegador durante el desarrollo. No guardes claves reales en archivos del repositorio.
-
 ## Archivos
 
 - `index.html` — estructura de la interfaz.
 - `integral_core.js` — núcleo matemático sin DOM: analizador de expresiones, integración numérica y simbólica, formato LaTeX/lineal. Se puede probar en Node.
-- `riemann_sumas_javascript.js` — interfaz: gráficas, tablas, calculadora, hoja A4, juegos y asistente.
+- `riemann_sumas_javascript.js` — interfaz: menú de inicio, gráficas, tablas, calculadora, hoja A4 y juegos.
 - `riemann_sumas_javascript.css` — estilos.
-- `riemann_ai_server.py` — servidor local y proxy de IA.
+- `riemann_ai_server.py` — servidor local de archivos.
 - `vendor/katex/` — KaTeX 0.16.11 (licencia MIT) con sus fuentes, para que las fórmulas se dibujen sin depender de una CDN.
 - `tests/` — pruebas automatizadas.

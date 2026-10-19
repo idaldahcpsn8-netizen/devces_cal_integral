@@ -10,13 +10,13 @@
   <link rel="stylesheet" href="./vendor/katex/katex.min.css">
   <link rel="stylesheet" href="./riemann_sumas_javascript.css">
 </head>
-<body>
+<body class="is-home" data-section="home">
   <div class="aurora" aria-hidden="true"><span></span><span></span><span></span></div>
   <header class="topbar">
-    <div class="brand">
+    <button id="homeBtn" class="brand" type="button" title="Volver al inicio">
       <span class="brand-mark" aria-hidden="true"></span>
       <strong>Yos_Sphere</strong>
-    </div>
+    </button>
 
     <nav class="section-nav" aria-label="Secciones principales">
       <span class="nav-indicator" aria-hidden="true"></span>
@@ -24,7 +24,6 @@
       <button class="section-tab" type="button" data-section="integrals"><span>Integrales</span></button>
       <button class="section-tab" type="button" data-section="import"><span>Hoja A4</span></button>
       <button class="section-tab" type="button" data-section="games"><span>Juegos</span></button>
-      <button class="section-tab" type="button" data-section="assistant"><span>Asistente</span></button>
     </nav>
     <input id="importFileInput" class="sr-only" type="file" accept=".txt,.csv,.json,.png,.jpg,.jpeg,.webp,.pdf,image/*,application/pdf" aria-label="Importar archivo">
 
@@ -36,6 +35,72 @@
       <button id="saveBtn" class="icon-btn" type="button" title="Guardar PNG"><i data-lucide="image"></i></button>
     </div>
   </header>
+
+  <main id="home" class="home" aria-labelledby="homeTitle">
+    <div class="home-hero">
+      <span class="home-sphere" aria-hidden="true"><span class="home-orbit"></span></span>
+      <p class="home-kicker">Cálculo integral, visual</p>
+      <h1 id="homeTitle">Yos_Sphere</h1>
+      <p class="home-lead">Aproxima áreas con rectángulos, resuelve integrales paso a paso y practica los métodos jugando. Elige por dónde empezar.</p>
+    </div>
+    <nav class="home-grid" aria-label="Secciones">
+      <button class="home-card" type="button" data-go="riemann" style="--i:0">
+        <svg class="home-art" viewBox="0 0 160 96" aria-hidden="true">
+          <g class="art-bars">
+            <rect x="14" y="58" width="18" height="30" rx="3"/><rect x="34" y="40" width="18" height="48" rx="3"/>
+            <rect x="54" y="28" width="18" height="60" rx="3"/><rect x="74" y="24" width="18" height="64" rx="3"/>
+            <rect x="94" y="30" width="18" height="58" rx="3"/><rect x="114" y="44" width="18" height="44" rx="3"/>
+          </g>
+          <path class="art-curve" d="M8 70 C 40 30, 70 14, 96 24 S 140 52, 152 60"/>
+          <line class="art-axis" x1="6" y1="88" x2="154" y2="88"/>
+        </svg>
+        <span class="home-card-body">
+          <strong>Suma de Riemann</strong>
+          <span>Divide el área en n rectángulos, compara izquierda, derecha y punto medio, y mira cómo S<sub>n</sub> se acerca a la integral.</span>
+        </span>
+        <span class="home-cta">Entrar <span aria-hidden="true">→</span></span>
+      </button>
+      <button class="home-card" type="button" data-go="integrals" style="--i:1">
+        <svg class="home-art" viewBox="0 0 160 96" aria-hidden="true">
+          <path class="art-integral" d="M50 84 C 60 86, 64 80, 66 68 L 74 26 C 76 14, 82 10, 90 12"/>
+          <text class="art-text" x="92" y="58">f(x) dx</text>
+          <text class="art-small" x="92" y="22">b</text>
+          <text class="art-small" x="40" y="92">a</text>
+        </svg>
+        <span class="home-card-body">
+          <strong>Integrales</strong>
+          <span>Escribe cualquier integrando y obtén la primitiva verificada, el valor exacto y el procedimiento completo.</span>
+        </span>
+        <span class="home-cta">Entrar <span aria-hidden="true">→</span></span>
+      </button>
+      <button class="home-card" type="button" data-go="import" style="--i:2">
+        <svg class="home-art" viewBox="0 0 160 96" aria-hidden="true">
+          <rect class="art-paper" x="51" y="5" width="58" height="84" rx="3"/>
+          <path class="art-poly" d="M62 30 L 96 22 L 102 62 L 70 76 Z"/>
+          <g class="art-dots"><circle cx="62" cy="30" r="3.5"/><circle cx="96" cy="22" r="3.5"/><circle cx="102" cy="62" r="3.5"/><circle cx="70" cy="76" r="3.5"/></g>
+        </svg>
+        <span class="home-card-body">
+          <strong>Hoja A4</strong>
+          <span>Sube una imagen o un PDF, marca el contorno de una figura y mide su área en centímetros cuadrados.</span>
+        </span>
+        <span class="home-cta">Entrar <span aria-hidden="true">→</span></span>
+      </button>
+      <button class="home-card" type="button" data-go="games" style="--i:3">
+        <svg class="home-art" viewBox="0 0 160 96" aria-hidden="true">
+          <g class="art-bubbles">
+            <circle cx="46" cy="52" r="22"/><circle cx="94" cy="34" r="17"/><circle cx="126" cy="66" r="13"/><circle cx="80" cy="78" r="9"/>
+          </g>
+          <path class="art-check" d="M36 52 l 7 7 l 13 -15"/>
+        </svg>
+        <span class="home-card-body">
+          <strong>Juegos</strong>
+          <span>Elige el método correcto (partes, sustitución, fracciones parciales…) y practica las reglas de derivación.</span>
+        </span>
+        <span class="home-cta">Entrar <span aria-hidden="true">→</span></span>
+      </button>
+    </nav>
+    <p class="home-foot">Consejo: pulsa <b>Yos_Sphere</b> arriba a la izquierda para volver a este menú.</p>
+  </main>
 
   <div class="workspace section-riemann">
     <aside class="algebra-panel" aria-label="Panel algebraico">
@@ -298,72 +363,6 @@
           </div>
         </section>
 
-        <section id="pAssistant" class="pane">
-          <div class="assistant-card">
-            <div class="assistant-head">
-              <div>
-                <strong>Asistente</strong>
-                <p id="assistantContext">Hola, ¿en qué te puedo ayudar?</p>
-              </div>
-              <button id="assistantSettingsBtn" class="icon-btn ghost assistant-settings" type="button" title="Configurar API IA"><i data-lucide="settings"></i></button>
-            </div>
-            <div id="assistantSettingsPanel" class="assistant-settings-panel">
-              <label class="field field-wide">
-                <span>Proveedor IA</span>
-                <select id="aiProviderInput">
-                  <option value="openai-compatible" selected>OpenAI compatible</option>
-                  <option value="gemini">Gemini</option>
-                  <option value="anthropic">Anthropic Claude</option>
-                  <option value="openai-responses">OpenAI Responses</option>
-                  <option value="custom">Personalizado</option>
-                </select>
-              </label>
-              <label class="field field-wide">
-                <span>Endpoint</span>
-                <input id="nvidiaEndpointInput" type="text" value="https://integrate.api.nvidia.com/v1/chat/completions" spellcheck="false">
-              </label>
-              <label class="field field-wide">
-                <span>API key visible (dev)</span>
-                <input id="nvidiaApiKeyInput" type="text" placeholder="sk-..., nvapi-..., claude-..., AIza..." spellcheck="false" autocomplete="off">
-              </label>
-              <label class="field field-wide">
-                <span>Modelo</span>
-                <input id="nvidiaModelInput" type="text" value="nvidia/llama-3.1-nemotron-ultra-253b-v1" spellcheck="false">
-              </label>
-              <div class="grid-three">
-                <label class="field">
-                  <span>Tokens</span>
-                  <input id="aiMaxTokensInput" type="number" value="2048" min="1" step="1">
-                </label>
-                <label class="field">
-                  <span>Temperatura</span>
-                  <input id="aiTemperatureInput" type="number" value="0.2" min="0" max="2" step="0.1">
-                </label>
-                <label class="field">
-                  <span>Top p</span>
-                  <input id="aiTopPInput" type="number" value="1" min="0" max="1" step="0.05">
-                </label>
-              </div>
-              <div class="action-row">
-                <button id="saveNvidiaConfigBtn" class="text-btn primary" type="button">Guardar configuración</button>
-                <button id="testAiConfigBtn" class="text-btn" type="button">Probar API</button>
-                <button id="clearNvidiaConfigBtn" class="text-btn" type="button">Borrar</button>
-              </div>
-              <div id="nvidiaConfigStatus" class="assistant-output mini">Configuracion unica: esta IA alimenta el Asistente y la ayuda de todas las secciones.</div>
-            </div>
-            <div id="assistantOutput" class="assistant-output">Hola, ¿en qué te puedo ayudar?</div>
-            <div class="chatbot-box">
-              <div id="chatMessages" class="chat-messages">
-                <div class="chat-message bot">Hola, ¿en qué te puedo ayudar?</div>
-              </div>
-              <div class="chat-input-row">
-                <input id="chatInput" type="text" placeholder="Escribe tu pregunta..." spellcheck="false">
-                <button id="chatSendBtn" class="text-btn primary" type="button">Enviar</button>
-              </div>
-            </div>
-          </div>
-        </section>
-
         <section id="pGames" class="pane">
           <div class="games-card">
             <div class="games-head">
@@ -399,27 +398,6 @@
         </section>
       </div>
     </aside>
-  </div>
-
-  <div id="sectionAiHelp" class="section-ai-help" aria-live="polite">
-    <button id="sectionAiToggle" class="section-ai-toggle" type="button" title="Ayuda de esta sección" aria-label="Ayuda de esta sección"><span class="brand-mark" aria-hidden="true"></span><span>Ayuda</span></button>
-    <div id="sectionAiPanel" class="section-ai-panel">
-      <div class="section-ai-head">
-        <div>
-          <strong id="sectionAiTitle">Ayuda de sección</strong>
-          <p id="sectionAiHint">Hola, ¿en qué te puedo ayudar?</p>
-          <span id="sectionAiProvider" class="section-ai-provider">Misma API del asistente</span>
-        </div>
-        <button id="sectionAiClose" class="icon-btn ghost" type="button" title="Cerrar ayuda"><i data-lucide="x"></i></button>
-      </div>
-      <div id="sectionAiMessages" class="section-ai-messages">
-        <div class="chat-message bot">Hola, ¿en qué te puedo ayudar?</div>
-      </div>
-      <div class="chat-input-row">
-        <input id="sectionAiInput" type="text" placeholder="Pregunta sobre esta sección..." spellcheck="false">
-        <button id="sectionAiSend" class="text-btn primary" type="button">Enviar</button>
-      </div>
-    </div>
   </div>
 
   <script src="./vendor/katex/katex.min.js"></script>
