@@ -520,13 +520,14 @@ function themeColors() {
     line2: token("--line-2", "rgba(60,60,67,.22)"),
     faint: token("--faint", "#aeaeb2"),
     fill: token("--fill", "rgba(118,118,128,.12)"),
-    blue: token("--blue", "#007aff"),
-    blueSoft: token("--blue-soft", "rgba(0,122,255,.1)"),
-    blueLine: token("--blue-line", "rgba(0,122,255,.35)"),
-    redSoft: token("--red-soft", "rgba(255,59,48,.1)"),
-    redLine: token("--red-line", "rgba(255,59,48,.35)"),
-    red: token("--red", "#d70015"),
-    orange: token("--orange", "#ff9500"),
+    blue: token("--curve", "#2563eb"),
+    curveGlow: token("--curve-glow", "rgba(37,99,235,.16)"),
+    blueSoft: token("--pos-fill", "rgba(20,184,166,.22)"),
+    blueLine: token("--pos-line", "rgba(13,148,136,.55)"),
+    redSoft: token("--neg-fill", "rgba(236,72,153,.16)"),
+    redLine: token("--neg-line", "rgba(219,39,119,.5)"),
+    red: token("--red", "#db2777"),
+    orange: token("--sample", "#f59e0b"),
     violet: token("--violet", "#5856d6"),
     sans: token("--sans", "system-ui, sans-serif")
   };
@@ -591,6 +592,16 @@ function drawGraph(input) {
     traces.push({ x: px, y: ny, type: "scatter", mode: "none", fill: "tozeroy", fillcolor: colors.redSoft, showlegend: false, hoverinfo: "skip" });
   }
 
+  // Halo luminoso bajo la curva
+  traces.push({
+    x: curve.x,
+    y: curve.y,
+    type: "scatter",
+    mode: "lines",
+    line: { color: colors.curveGlow, width: 12 },
+    hoverinfo: "skip",
+    showlegend: false
+  });
   traces.push({
     x: curve.x,
     y: curve.y,
@@ -655,8 +666,8 @@ function drawGraph(input) {
     font: { size: 11, color: colors.text, family: colors.sans }
   });
   const layout = {
-    paper_bgcolor: colors.surface,
-    plot_bgcolor: colors.surface,
+    paper_bgcolor: "rgba(0,0,0,0)",
+    plot_bgcolor: "rgba(0,0,0,0)",
     font: { family: colors.sans, size: 12, color: colors.muted },
     hoverlabel: {
       bgcolor: colors.surface,
@@ -706,15 +717,108 @@ function integralTex(value = STATE.exact, status = STATE.integral?.status) {
   return fmt(value);
 }
 
+// Cifra que se anima desde el valor que se ve en pantalla hasta el nuevo.
+// Si llega otro valor a mitad de camino, la animación continúa desde donde iba.
+function setAnimatedNumber(el, value, text = fmt(value), format = fmt) {
+  if (!el) return;
+  cancelAnimationFrame(el._tween || 0);
+  const from = el._shown;
+  if (!Number.isFinite(value) || !Number.isFinite(from) || REDUCED_MOTION || from === value) {
+    el._shown = Number.isFinite(value) ? value : NaN;
+    el.textContent = text;
+    return;
+  }
+  const start = performance.now();
+  const duration = 520;
+  const step = now => {
+    const t = Math.min(1, (now - start) / duration);
+    const eased = 1 - Math.pow(1 - t, 4);
+    const current = from + (value - from) * eased;
+    el._shown = current;
+    if (t < 1) {
+      el.textContent = format(current);
+      el._tween = requestAnimationFrame(step);
+    } else {
+      el._shown = value;
+      el.textContent = text;
+    }
+  };
+  el._tween = requestAnimationFrame(step);
+}
+
 function updateMetrics(input) {
   const infinite = $("infinityInput").checked;
   const error = Math.abs(STATE.data.sum - STATE.exact);
-  $("metricN").textContent = infinite ? "∞" : String(input.manualN);
-  $("metricDx").textContent = infinite ? "0" : fmt(STATE.data.dx);
-  $("metricSum").textContent = infinite ? integralLabel() : fmt(STATE.data.sum);
-  $("metricIntegral").textContent = integralLabel();
-  $("metricError").textContent = !integralHasValue() ? "—" : fmt(infinite ? 0 : error);
-  $("metricTotal").textContent = Number.isFinite(STATE.areas.total) ? fmt(STATE.areas.total) : "—";
+  setAnimatedNumber($("metricN"), infinite ? NaN : input.manualN, infinite ? "∞" : String(input.manualN), v => String(Math.round(v)));
+  setAnimatedNumber($("metricDx"), infinite ? NaN : STATE.data.dx, infinite ? "0" : fmt(STATE.data.dx));
+  setAnimatedNumber($("metricSum"), infinite ? STATE.exact : STATE.data.sum, infinite ? integralLabel() : fmt(STATE.data.sum));
+  setAnimatedNumber($("metricIntegral"), STATE.exact, integralLabel());
+  setAnimatedNumber($("metricError"), integralHasValue() ? (infinite ? 0 : error) : NaN, !integralHasValue() ? "—" : fmt(infinite ? 0 : error));
+  setAnimatedNumber($("metricTotal"), STATE.areas.total, Number.isFinite(STATE.areas.total) ? fmt(STATE.areas.total) : "—");
+}
+
+// ▶ Animar n: aumenta n paso a paso para ver cómo S_n se acerca a la integral.
+const PLAY_STEPS = [1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 25, 32, 40, 50, 64, 80, 100, 128, 160, 200, 256, 320, 400, 500];
+let playTimer = 0;
+
+function stopPlayLimit() {
+  if (!playTimer) return;
+  clearTimeout(playTimer);
+  playTimer = 0;
+  const button = $("playLimitBtn");
+  if (button) {
+    button.setAttribute("aria-pressed", "false");
+    button.querySelector(".play-label").textContent = "Animar n";
+  }
+}
+
+function togglePlayLimit() {
+  if (playTimer) {
+    stopPlayLimit();
+    return;
+  }
+  $("infinityInput").checked = false;
+  const button = $("playLimitBtn");
+  button.setAttribute("aria-pressed", "true");
+  button.querySelector(".play-label").textContent = "Detener";
+  let index = 0;
+  const tick = () => {
+    const n = PLAY_STEPS[index];
+    $("nInput").value = n;
+    $("nRange").value = n;
+    updateAll();
+    index++;
+    if (index >= PLAY_STEPS.length) {
+      playTimer = 0;
+      stopPlayLimit();
+      setStatus(`S_n se acerca a la integral: con n = ${n}, error ${$("metricError").textContent}`);
+      return;
+    }
+    playTimer = setTimeout(tick, index < 8 ? 520 : 300);
+  };
+  playTimer = setTimeout(tick, 0);
+}
+
+// Indicador de la navegación que se desliza a la sección activa.
+function moveNavIndicator() {
+  const nav = document.querySelector(".section-nav");
+  const active = nav?.querySelector(".section-tab.is-active");
+  if (!nav || !active) return;
+  nav.style.setProperty("--nav-x", `${active.offsetLeft}px`);
+  nav.style.setProperty("--nav-w", `${active.offsetWidth}px`);
+}
+
+// Brillo suave que sigue al puntero sobre las tarjetas.
+function bindGlowCards() {
+  if (typeof matchMedia === "function" && !matchMedia("(hover: hover)").matches) return;
+  document.querySelectorAll(".graph-shell, .stat, .result-box, .game-question, .scard, .formula-row").forEach(card => card.classList.add("glow-card"));
+  document.addEventListener("pointermove", event => {
+    const card = event.target.closest?.(".glow-card");
+    if (!card) return;
+    const rect = card.getBoundingClientRect();
+    card.style.setProperty("--mx", `${event.clientX - rect.left}px`);
+    card.style.setProperty("--my", `${event.clientY - rect.top}px`);
+  }, { passive: true });
 }
 
 function compactTableRows(rects) {
@@ -1016,6 +1120,9 @@ function solveIntegralAdvanced() {
   renderSolverSummary(solution);
   if (solution.definite) {
     renderMath(result, definiteResultTex(solution), true);
+    result.classList.remove("is-fresh");
+    void result.offsetWidth;
+    result.classList.add("is-fresh");
   } else if (solution.anti) {
     renderMath(result, `\\int\\!\\left(${exprToLatex(solution.expr)}\\right)dx=${exprToLatex(solution.anti)}+C`, true);
   } else {
@@ -1083,6 +1190,8 @@ function setSectionActive(section) {
   document.querySelectorAll(".section-tab").forEach(tab => {
     tab.classList.toggle("is-active", tab.dataset.section === section);
   });
+  moveNavIndicator();
+  if (section !== "riemann") stopPlayLimit();
   updateSectionAiHelp();
 }
 
@@ -1284,7 +1393,7 @@ function renderA4Canvas() {
   }
 
   ctx.save();
-  ctx.strokeStyle = "rgba(0,122,255,.10)";
+  ctx.strokeStyle = "rgba(37,99,235,.10)";
   ctx.lineWidth = 1;
   for (let x = 0; x <= A4.widthCm; x++) {
     const px = x / A4.widthCm * canvas.width;
@@ -1304,16 +1413,16 @@ function renderA4Canvas() {
 
   const selection = getA4Selection();
   if (A4.points.length >= 3) {
-    ctx.fillStyle = "rgba(0,122,255,.16)";
-    ctx.strokeStyle = "rgba(0,122,255,.4)";
+    ctx.fillStyle = "rgba(37,99,235,.16)";
+    ctx.strokeStyle = "rgba(37,99,235,.4)";
     ctx.lineWidth = 1;
     for (const rect of selection.rects) {
       ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
       ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
     }
 
-    ctx.fillStyle = "rgba(0,122,255,.05)";
-    ctx.strokeStyle = "#007aff";
+    ctx.fillStyle = "rgba(37,99,235,.05)";
+    ctx.strokeStyle = "#2563eb";
     ctx.lineWidth = 2;
     ctx.beginPath();
     A4.points.forEach((point, index) => {
@@ -1334,7 +1443,7 @@ function renderA4Canvas() {
   }
 
   A4.points.forEach((point, index) => {
-    ctx.fillStyle = "#007aff";
+    ctx.fillStyle = "#2563eb";
     ctx.strokeStyle = "#ffffff";
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -2279,6 +2388,11 @@ function bindEvents() {
   });
 
   $("integralSolveBtn").addEventListener("click", solveIntegralAdvanced);
+  $("playLimitBtn")?.addEventListener("click", togglePlayLimit);
+  ["exprInput", "aInput", "bInput", "nInput", "nRange", "infinityInput"].forEach(id => {
+    $(id).addEventListener("input", stopPlayLimit);
+  });
+  document.querySelectorAll(".seg-btn, .chip[data-example], #resetBtn").forEach(el => el.addEventListener("click", stopPlayLimit));
   ["integralExpr", "integralA", "integralB"].forEach(id => {
     const el = $(id);
     if (!el) return;
@@ -2345,6 +2459,7 @@ function bindEvents() {
   }
 
   window.addEventListener("resize", () => {
+    moveNavIndicator();
     if (STATE.input) drawGraph(STATE.input);
   });
 }
@@ -2666,6 +2781,9 @@ function init() {
   updateSectionAiHelp();
   injectWelcomeModalStyles();
   maybeShowWelcomeModal();
+  bindGlowCards();
+  moveNavIndicator();
+  document.fonts?.ready?.then(moveNavIndicator);
 }
 
 init();
