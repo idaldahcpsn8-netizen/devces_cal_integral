@@ -1,4 +1,4 @@
-# Dev_Aldah_V3
+# Yos_Sphere
 
 Interfaz web educativa para visualizar sumas de Riemann, resolver integrales y trabajar con áreas sobre una hoja A4 importada desde imagen o PDF.
 

@@ -1,5 +1,5 @@
 {
-  "name": "dev-aldah-v3",
+  "name": "yos-sphere",
   "private": true,
   "description": "Studio de cálculo integral: sumas de Riemann, calculadora de integrales y áreas sobre hoja A4.",
   "scripts": {

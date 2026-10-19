@@ -3,29 +3,26 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Dev_Aldah_V3</title>
+  <title>Yos_Sphere</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous">
   <link rel="stylesheet" href="./riemann_sumas_javascript.css">
 </head>
 <body>
   <header class="topbar">
     <div class="brand">
-      <div class="brand-mark">∫</div>
-      <div>
-        <strong>Dev_Aldah_V3</strong>
-        <span>Studio matemático</span>
-      </div>
+      <span class="brand-mark" aria-hidden="true"></span>
+      <strong>Yos_Sphere</strong>
     </div>
 
     <nav class="section-nav" aria-label="Secciones principales">
-      <button class="section-tab" type="button" data-section="import"><i data-lucide="upload"></i><span>Importar archivo</span></button>
-      <button class="section-tab is-active" type="button" data-section="riemann"><i data-lucide="sigma"></i><span>Suma de Riemann</span></button>
-      <button class="section-tab" type="button" data-section="integrals"><i data-lucide="calculator"></i><span>Calculadora de integrales</span></button>
-      <button class="section-tab" type="button" data-section="assistant"><i data-lucide="bot"></i><span>Asistente</span></button>
-      <button class="section-tab" type="button" data-section="games"><i data-lucide="gamepad-2"></i><span>Juegos</span></button>
+      <button class="section-tab is-active" type="button" data-section="riemann"><span>Riemann</span></button>
+      <button class="section-tab" type="button" data-section="integrals"><span>Integrales</span></button>
+      <button class="section-tab" type="button" data-section="import"><span>Hoja A4</span></button>
+      <button class="section-tab" type="button" data-section="games"><span>Juegos</span></button>
+      <button class="section-tab" type="button" data-section="assistant"><span>Asistente</span></button>
     </nav>
     <input id="importFileInput" class="sr-only" type="file" accept=".txt,.csv,.json,.png,.jpg,.jpeg,.webp,.pdf,image/*,application/pdf" aria-label="Importar archivo">
 
@@ -34,7 +31,7 @@
     <div class="top-actions">
       <button id="resetBtn" class="icon-btn" type="button" title="Reiniciar"><i data-lucide="rotate-ccw"></i></button>
       <button id="exportBtn" class="icon-btn" type="button" title="Exportar CSV"><i data-lucide="download"></i></button>
-      <button id="saveBtn" class="icon-btn primary" type="button" title="Guardar PNG"><i data-lucide="image"></i></button>
+      <button id="saveBtn" class="icon-btn" type="button" title="Guardar PNG"><i data-lucide="image"></i></button>
     </div>
   </header>
 
@@ -43,7 +40,7 @@
       <div class="panel-title">
         <div>
           <h1>Suma de Riemann</h1>
-          <p>Función, intervalo y partición</p>
+          <p>Aproxima el área bajo f(x) con n rectángulos.</p>
         </div>
         <button id="collapseDetailsBtn" class="icon-btn ghost" type="button" title="Mostrar u ocultar detalles"><i data-lucide="panel-right"></i></button>
       </div>
@@ -96,41 +93,30 @@
           <button class="chip" type="button" data-example="sin(x) + 0.5*x">sin(x)+0.5x</button>
           <button class="chip" type="button" data-example="x**2 - 3*x + 2">Parábola</button>
           <button class="chip" type="button" data-example="cos(x) + 1">cos(x)+1</button>
+          <button class="chip" type="button" data-example="exp(-x^2)">e^(−x²)</button>
         </div>
       </section>
 
-      <section class="object-list" aria-label="Objetos">
-        <div class="object-row">
-          <span class="swatch blue"></span>
-          <div><span>Función</span><b id="objectFunction">f(x)</b></div>
+      <section class="object-list" aria-label="Resultados">
+        <b id="objectFunction" class="sr-only">f(x)</b>
+        <div class="stat stat-wide">
+          <span>Suma S<sub>n</sub></span>
+          <b id="metricSum">0</b>
         </div>
-        <div class="object-row">
-          <span class="swatch orange"></span>
-          <div><span>Partición</span><b><span id="metricN">40</span> rectángulos · Δx <span id="metricDx">0</span></b></div>
+        <div class="stat stat-wide stat-accent">
+          <span>Integral</span>
+          <b id="metricIntegral">0</b>
         </div>
-        <div class="object-row">
-          <span class="swatch green"></span>
-          <div><span>Suma</span><b id="metricSum">0</b></div>
-        </div>
-        <div class="object-row">
-          <span class="swatch violet"></span>
-          <div><span>Integral</span><b id="metricIntegral">0</b></div>
-        </div>
-        <div class="object-row">
-          <span class="swatch red"></span>
-          <div><span>Error</span><b id="metricError">0</b></div>
-        </div>
-        <div class="object-row">
-          <span class="swatch teal"></span>
-          <div><span>Área total</span><b id="metricTotal">0</b></div>
-        </div>
+        <div class="stat"><span>Error |S<sub>n</sub> − I|</span><b id="metricError">0</b></div>
+        <div class="stat"><span>Área total</span><b id="metricTotal">0</b></div>
+        <div class="stat"><span>Rectángulos</span><b id="metricN">40</b></div>
+        <div class="stat"><span>Δx</span><b id="metricDx">0</b></div>
       </section>
     </aside>
 
     <main class="graph-shell" aria-label="Vista gráfica">
       <div class="graph-head">
         <div class="graph-title">
-          <i data-lucide="activity"></i>
           <span id="graphExpression">f(x)=sin(x)+0.5x</span>
         </div>
         <div class="graph-badges">
@@ -141,27 +127,26 @@
       </div>
       <div id="plotlyGraph"></div>
       <div class="command-bar">
-        <span>Entrada</span>
-        <input id="commandInput" type="text" value="f(x)=sin(x)+0.5*x" spellcheck="false" autocomplete="off">
+        <span>f(x) =</span>
+        <input id="commandInput" type="text" value="sin(x) + 0.5*x" aria-label="Función f(x)" spellcheck="false" autocomplete="off">
         <button id="commandApplyBtn" class="icon-btn primary" type="button" title="Aplicar entrada"><i data-lucide="corner-down-left"></i></button>
       </div>
     </main>
 
     <aside class="details-panel" aria-label="Detalles">
       <div class="tabs">
-        <button class="tab active" type="button" data-t="pTabla"><i data-lucide="table-2"></i><span>Tabla</span></button>
-        <button class="tab" type="button" data-t="pFormulas"><i data-lucide="function-square"></i><span>Fórmulas</span></button>
-        <button class="tab" type="button" data-t="pResolve"><i data-lucide="book-open"></i><span>Pasos</span></button>
+        <button class="tab active" type="button" data-t="pTabla"><span>Tabla</span></button>
+        <button class="tab" type="button" data-t="pFormulas"><span>Fórmulas</span></button>
+        <button class="tab" type="button" data-t="pResolve"><span>Pasos</span></button>
       </div>
 
       <div class="panes">
         <section id="pImport" class="pane">
           <div class="import-card">
             <div class="import-head">
-              <span class="assistant-mark">UP</span>
               <div>
-                <strong>Importar archivo</strong>
-                <p>Carga texto, imagen o PDF y mide áreas sobre hoja A4.</p>
+                <strong>Hoja A4</strong>
+                <p>Carga una imagen o PDF, rodea una figura con puntos y mide su área en cm².</p>
               </div>
             </div>
             <div class="action-row">
@@ -171,8 +156,8 @@
               <button id="a4ClearBtn" class="text-btn" type="button">Limpiar puntos</button>
             </div>
             <div class="import-help">
-              <p>Texto/JSON configura la función. Imagen/PDF se renderiza sobre A4.</p>
-              <p>Haz clic rodeando el área. Con 3 o más puntos se cierra la figura y se llena con rectángulos de punto medio.</p>
+              <p>Haz clic alrededor del área en orden. Con 3 puntos o más la figura se cierra y se llena con rectángulos de punto medio de 0.5 cm.</p>
+              <p>Un archivo .txt o .json con <code>f(x) = …</code>, <code>a</code>, <code>b</code> y <code>n</code> configura la suma de Riemann.</p>
             </div>
             <div class="a4-workbench">
               <div class="a4-canvas-wrap">
@@ -226,10 +211,10 @@
           <div id="sInt" class="spane show">
             <div class="solver-head">
               <div>
-                <strong>Solucionador de integrales</strong>
-                <p>Primitiva verificada, fracciones parciales, integrales impropias y decimal.</p>
+                <strong>Integrales</strong>
+                <p>Escribe el integrando. Deja a y b vacíos para la primitiva.</p>
               </div>
-              <span id="solverModeBadge">Integral</span>
+              <span id="solverModeBadge" class="sr-only">Integral</span>
             </div>
             <label class="field field-wide">
               <span>Integrando</span>
@@ -240,9 +225,13 @@
               <label class="field"><span>a</span><input id="integralA" type="text" placeholder="0, -inf, pi/2" spellcheck="false" autocomplete="off"></label>
               <label class="field"><span>b</span><input id="integralB" type="text" placeholder="1, inf, sqrt(2)" spellcheck="false" autocomplete="off"></label>
             </div>
+            <div class="math-keypad mode-switch" role="group" aria-label="Tipo de integral">
+              <button type="button" data-mode="indef">Indefinida</button>
+              <button type="button" data-mode="def">Definida</button>
+            </div>
+            <details class="keypad-drawer">
+              <summary>Teclado matemático</summary>
             <div class="math-keypad" aria-label="Teclado matemático">
-              <button type="button" data-mode="indef">∫ indef.</button>
-              <button type="button" data-mode="def">∫ definida</button>
               <button type="button" data-insert="inf" title="Infinito para límites de integración">∞</button>
               <button type="button" data-insert="x">x</button>
               <button type="button" data-insert="0">0</button>
@@ -286,6 +275,7 @@
               <button type="button" data-action="backspace">⌫</button>
               <button type="button" data-action="clear">C</button>
             </div>
+            </details>
             <div class="action-row">
               <button id="integralSolveBtn" class="text-btn primary" type="button">Resolver</button>
               <button id="integralExampleBtn" class="text-btn" type="button">Ejemplo</button>
@@ -300,7 +290,6 @@
         <section id="pAssistant" class="pane">
           <div class="assistant-card">
             <div class="assistant-head">
-              <span class="assistant-mark">AI</span>
               <div>
                 <strong>Asistente</strong>
                 <p id="assistantContext">Hola, ¿en qué te puedo ayudar?</p>
@@ -367,10 +356,9 @@
         <section id="pGames" class="pane">
           <div class="games-card">
             <div class="games-head">
-              <span class="assistant-mark">JG</span>
               <div>
                 <strong>Juegos</strong>
-                <p>Clasifica ejercicios con burbujas y refuerza el método correcto.</p>
+                <p>Elige el método correcto para cada ejercicio.</p>
               </div>
             </div>
             <div class="game-tabs" role="group" aria-label="Juegos disponibles">
@@ -386,7 +374,7 @@
               <div id="bubbleArena" class="bubble-arena" aria-label="Opciones del juego"></div>
               <div class="game-feedback">
                 <div>
-                  <span>Puntaje</span>
+                  <span>Aciertos</span>
                   <b id="gameScore">0/0</b>
                 </div>
                 <p id="gameFeedbackText">Toca una burbuja para empezar.</p>
@@ -403,10 +391,9 @@
   </div>
 
   <div id="sectionAiHelp" class="section-ai-help" aria-live="polite">
-    <button id="sectionAiToggle" class="section-ai-toggle" type="button" title="Ayuda IA"><i data-lucide="sparkles"></i><span>IA</span></button>
+    <button id="sectionAiToggle" class="section-ai-toggle" type="button" title="Ayuda de esta sección" aria-label="Ayuda de esta sección"><span class="brand-mark" aria-hidden="true"></span><span>Ayuda</span></button>
     <div id="sectionAiPanel" class="section-ai-panel">
       <div class="section-ai-head">
-        <span class="assistant-mark">IA</span>
         <div>
           <strong id="sectionAiTitle">Ayuda de sección</strong>
           <p id="sectionAiHint">Hola, ¿en qué te puedo ayudar?</p>

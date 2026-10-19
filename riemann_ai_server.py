@@ -236,7 +236,7 @@ class Handler(SimpleHTTPRequestHandler):
 
 def main():
     server = ThreadingHTTPServer((HOST, PORT), Handler)
-    print(f"Dev_Aldah_V3 server running at http://{HOST}:{PORT}/index.html")
+    print(f"Yos_Sphere server running at http://{HOST}:{PORT}/index.html")
     server.serve_forever()
 
 

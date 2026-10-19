@@ -26,8 +26,9 @@ const A4 = {
   fileName: "Sin archivo"
 };
 
-const AI_CONFIG_KEY = "Dev_Aldah_V3.aiConfig";
-const NVIDIA_CONFIG_KEY = "Dev_Aldah_V3.nvidiaConfig";
+const AI_CONFIG_KEY = "Yos_Sphere.aiConfig";
+// Claves usadas antes del cambio de nombre: se leen para no perder la configuración guardada.
+const LEGACY_AI_CONFIG_KEYS = ["Dev_Aldah_V3.aiConfig", "Dev_Aldah_V3.nvidiaConfig"];
 let activeMathInput = null;
 let chatRequestId = 0;
 let sectionAiRequestId = 0;
@@ -228,6 +229,10 @@ function updateMathPreviews() {
   const integralExpr = $("integralExpr")?.value || "";
   const a = $("integralA")?.value.trim() || "";
   const b = $("integralB")?.value.trim() || "";
+  document.querySelectorAll(".mode-switch [data-mode]").forEach(button => {
+    const definite = Boolean(a || b);
+    button.classList.toggle("is-active", button.dataset.mode === (definite ? "def" : "indef"));
+  });
 
   renderMath($("mainExprPreview"), `f(x)=${exprToLatex(mainExpr)}`, true);
   if (a && b) {
@@ -657,7 +662,7 @@ function drawGraph(input) {
     displaylogo: false,
     scrollZoom: true,
     modeBarButtonsToRemove: ["select2d", "lasso2d", "autoScale2d"],
-    toImageButtonOptions: { filename: "integral_studio", format: "png", scale: 2 }
+    toImageButtonOptions: { filename: "yos_sphere", format: "png", scale: 2 }
   };
   Plotly.react("plotlyGraph", traces, layout, config);
 }
@@ -775,7 +780,7 @@ function updateChrome(input) {
   $("badgeInterval").textContent = `[${fmt(input.a, 2)}, ${fmt(input.b, 2)}]`;
   $("badgeRows").textContent = infinite ? "límite n→∞" : `${input.manualN} rectángulos`;
   if (document.activeElement !== $("commandInput")) {
-    $("commandInput").value = `f(x)=${input.expr}`;
+    $("commandInput").value = input.expr;
   }
 }
 
@@ -1079,8 +1084,7 @@ function switchMainSection(section) {
   if (section === "import") {
     showDetailsPanel();
     switchTab("pImport");
-    $("importFileInput").click();
-    setStatus("Importa texto, imagen o PDF");
+    setStatus("Carga una imagen o PDF y marca el contorno");
     return;
   }
 
@@ -1741,8 +1745,9 @@ function inferAiProvider(config) {
 function getAiConfig() {
   let config = {};
   try { config = JSON.parse(localStorage.getItem(AI_CONFIG_KEY) || "{}"); } catch (_) {}
-  if (!config.endpoint && !config.apiKey && !config.model) {
-    try { config = JSON.parse(localStorage.getItem(NVIDIA_CONFIG_KEY) || "{}"); } catch (_) {}
+  for (const key of LEGACY_AI_CONFIG_KEYS) {
+    if (config.endpoint || config.apiKey || config.model) break;
+    try { config = JSON.parse(localStorage.getItem(key) || "{}"); } catch (_) {}
   }
   return { ...config, provider: inferAiProvider(config) };
 }
@@ -2042,7 +2047,7 @@ async function sendSectionHelpMessage() {
   }
 
   try {
-    const answer = await askAi(buildUnifiedAiQuestion(question, key), "Eres la unica IA configurada desde el panel Asistente de Dev_Aldah_V3. Usa el contexto de la seccion activa y responde solo en espanol claro, directo y con pasos cortos. Escribe las matematicas en formato lineal: usa 3/2, (x + 5)/(x^2 + 3*x + 2) y parentesis solo cuando eviten ambiguedad. No uses LaTeX ni fracciones verticales.", { maxTokens: 700, temperature: 0.2, topP: 0.8 });
+    const answer = await askAi(buildUnifiedAiQuestion(question, key), "Eres la unica IA configurada desde el panel Asistente de Yos_Sphere. Usa el contexto de la seccion activa y responde solo en espanol claro, directo y con pasos cortos. Escribe las matematicas en formato lineal: usa 3/2, (x + 5)/(x^2 + 3*x + 2) y parentesis solo cuando eviten ambiguedad. No uses LaTeX ni fracciones verticales.", { maxTokens: 700, temperature: 0.2, topP: 0.8 });
     if (requestId !== sectionAiRequestId) return;
     addSectionHelpMessage("bot", usableAiResponse(answer) || localSectionHelpReply(question));
   } catch (error) {
@@ -2067,7 +2072,7 @@ async function sendChatMessage() {
   }
 
   try {
-    const answer = await askAi(buildUnifiedAiQuestion(question, key), "Eres la unica IA configurada desde el panel Asistente de Dev_Aldah_V3. Responde solo en espanol claro, breve y paso a paso. Escribe las matematicas en formato lineal: usa 3/2, (x + 5)/(x^2 + 3*x + 2) y parentesis solo cuando eviten ambiguedad. No uses LaTeX ni fracciones verticales.", { maxTokens: 900, temperature: 0.2, topP: 0.8 });
+    const answer = await askAi(buildUnifiedAiQuestion(question, key), "Eres la unica IA configurada desde el panel Asistente de Yos_Sphere. Responde solo en espanol claro, breve y paso a paso. Escribe las matematicas en formato lineal: usa 3/2, (x + 5)/(x^2 + 3*x + 2) y parentesis solo cuando eviten ambiguedad. No uses LaTeX ni fracciones verticales.", { maxTokens: 900, temperature: 0.2, topP: 0.8 });
     if (requestId !== chatRequestId) return;
     addChatMessage("bot", usableAiResponse(answer) || localAssistantReply(question));
   } catch (error) {
@@ -2106,7 +2111,12 @@ function saveNvidiaConfig() {
     temperature: numberFromInput("aiTemperatureInput", 0.2),
     topP: numberFromInput("aiTopPInput", 1)
   };
-  localStorage.setItem(AI_CONFIG_KEY, JSON.stringify(config));
+  try {
+    localStorage.setItem(AI_CONFIG_KEY, JSON.stringify(config));
+  } catch (_) {
+    $("nvidiaConfigStatus").textContent = "El navegador no permite guardar la configuración en este equipo.";
+    return;
+  }
   $("nvidiaConfigStatus").textContent = config.apiKey
     ? `IA unica guardada (${aiProviderLabel(config)}). Asistente y secciones usan esta misma API.`
     : "Guarde endpoint/modelo. Falta la API key unica.";
@@ -2114,8 +2124,10 @@ function saveNvidiaConfig() {
 }
 
 function clearNvidiaConfig() {
-  localStorage.removeItem(AI_CONFIG_KEY);
-  localStorage.removeItem(NVIDIA_CONFIG_KEY);
+  try {
+    localStorage.removeItem(AI_CONFIG_KEY);
+    LEGACY_AI_CONFIG_KEYS.forEach(key => localStorage.removeItem(key));
+  } catch (_) {}
   $("nvidiaApiKeyInput").value = "";
   $("aiMaxTokensInput").value = "2048";
   $("aiTemperatureInput").value = "0.2";
@@ -2240,7 +2252,7 @@ function bindEvents() {
   $("exportBtn").addEventListener("click", exportCSV);
   $("saveBtn").addEventListener("click", () => {
     if (typeof Plotly !== "undefined") {
-      Plotly.downloadImage("plotlyGraph", { format: "png", width: 1600, height: 900, filename: "integral_studio" });
+      Plotly.downloadImage("plotlyGraph", { format: "png", width: 1600, height: 900, filename: "yos_sphere" });
     }
   });
 
@@ -2324,9 +2336,9 @@ function buildWelcomeModal() {
 <div class="wm-overlay" id="aiWmOverlay">
   <div class="wm-card">
     <div class="wm-header">
-      <span class="wm-icon">∫</span>
+      <span class="wm-icon brand-mark" aria-hidden="true"></span>
       <div>
-        <strong>Dev_Aldah_V3 · Asistente IA</strong>
+        <strong>Asistente de Yos_Sphere</strong>
         <p>Configura tu API de IA preferida para activar el asistente de forma global.</p>
       </div>
     </div>
@@ -2527,7 +2539,7 @@ function buildWelcomeModal() {
       topP: 1
     };
     
-    localStorage.setItem(AI_CONFIG_KEY, JSON.stringify(config));
+    try { localStorage.setItem(AI_CONFIG_KEY, JSON.stringify(config)); } catch (_) {}
     loadNvidiaConfig(); // sincronizar panel lateral del asistente
     
     try {
@@ -2583,8 +2595,8 @@ function injectWelcomeModalStyles() {
 @keyframes wmFade{from{opacity:0}to{opacity:1}}
 @keyframes wmIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}
 .wm-header{display:flex;gap:12px;align-items:flex-start;margin-bottom:20px}
-.wm-icon{width:32px;height:32px;display:grid;place-items:center;flex:none;border-radius:8px;background:var(--primary);color:var(--on-primary);font:italic 500 19px/1 Georgia,serif}
-.wm-header strong{display:block;font-size:15px;font-weight:600;letter-spacing:-.015em;color:var(--text)}
+.wm-icon{width:28px;height:28px;flex:none;margin-top:2px}
+.wm-header strong{display:block;font:400 22px/1.15 var(--display);letter-spacing:-.01em;color:var(--text)}
 .wm-header p{font-size:13px;color:var(--muted);margin:.2rem 0 0}
 .wm-body{display:flex;flex-direction:column;gap:14px}
 .wm-step{display:flex;gap:12px;align-items:flex-start}
@@ -2631,7 +2643,6 @@ function init() {
   renderGame();
   updateSectionAiHelp();
   injectWelcomeModalStyles();
-  injectNoKeyBanner();
   maybeShowWelcomeModal();
 }
 

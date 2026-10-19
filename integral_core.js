@@ -1,7 +1,7 @@
 "use strict";
 
 /*
- * Núcleo matemático de Dev_Aldah_V3.
+ * Núcleo matemático de Yos_Sphere.
  *
  * - Analizador de expresiones (tokens → árbol) con mensajes de error en español.
  * - Evaluación segura y rápida de f(x) a partir del árbol (sin eval de texto libre).
